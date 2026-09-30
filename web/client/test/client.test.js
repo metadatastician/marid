@@ -121,4 +121,27 @@ describe("@marid/client Unit Tests", () => {
     expect(resynced).toBe(true);
     sub.cancel();
   });
+
+  test("baseUrl drops every trailing slash and keeps inner ones", async () => {
+    const seen = [];
+    const mockFetch = async (url) => {
+      seen.push(url);
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+
+    await new MaridClient({ baseUrl: "https://api.example.com///", fetch: mockFetch }).fetchJson("/taxa/123");
+    await new MaridClient({ baseUrl: "https://a.example/b/", fetch: mockFetch }).fetchJson("/taxa/123");
+    expect(seen).toEqual(["https://api.example.com/taxa/123", "https://a.example/b/taxa/123"]);
+    expect(new MaridClient({ baseUrl: "///" }).baseUrl).toBe("");
+  });
+
+  test("baseUrl normalisation is linear on a run of slashes (CodeQL js/polynomial-redos)", () => {
+    // `.replace(/\/+$/, "")` backtracks quadratically here: ~2.3 s at
+    // n=80000 under bun 1.3.14, against ~0.01 ms for a linear scan.
+    const hostile = "/".repeat(100000) + "x";
+    const t0 = performance.now();
+    const client = new MaridClient({ baseUrl: hostile });
+    expect(performance.now() - t0).toBeLessThan(250);
+    expect(client.baseUrl).toBe(hostile);
+  });
 });
