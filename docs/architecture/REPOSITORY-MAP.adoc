@@ -21,6 +21,10 @@ predecessors did.
 | yes
 | AI editor rules. Cline/Cursor/Windsurf read these from the project
 
+| `.coderabbit.yaml`
+| yes
+| CodeRabbit reads its repo config from the root only (D213)
+
 | `.cursorrules`
 | yes
 | ROOT, so the copies formerly under .machine_readable/ai/ were inert.

@@ -49,6 +49,7 @@ coordination.k9.ncl        # repo-local session binding (template-mandated)
 .tool-versions
 mise.toml                  # pinned toolchains
 .hypatia-ignore            # the Hypatia scanner reads it from the repo root
+.coderabbit.yaml           # CodeRabbit reads its repo config from the root only (D213)
 .clinerules                # AI editor rules. Cline/Cursor/Windsurf read these from the project
 .cursorrules               # ROOT, so the copies formerly under .machine_readable/ai/ were inert.
 .windsurfrules
