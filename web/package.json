@@ -1,0 +1,15 @@
+{
+  "name": "marid-web",
+  "private": true,
+  "description": "Bun workspace root for the Marid browser packages. Never published.",
+  "workspaces": [
+    "client",
+    "elements",
+    "react",
+    "vue"
+  ],
+  "scripts": {
+    "test": "bun test"
+  },
+  "license": "MPL-2.0"
+}

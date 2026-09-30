@@ -1,0 +1,58 @@
+# This workflow is managed by gh actions-lock.
+# SPDX-License-Identifier: MPL-2.0
+# Browser packages (web/*): install the bun workspace and run every test.
+#
+# The workspace install is what makes `@metadatastician/marid-client` resolve
+# for react and vue (D226). Without it those two test files fail to load, so a
+# green run here is also proof the packages resolve by name, not by path.
+name: Web CI
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci.yml'
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bun-test:
+    name: bun test (web/*)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: '1.4.2'
+      - name: Install workspace (frozen lockfile)
+        run: bun install --frozen-lockfile
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          # bun test can exit 0 having run nothing, so assert it loaded every
+          # test file in the workspace AND ran at least one test, not merely
+          # that it did not fail. (bun counts an empty file as a file, so the
+          # file count alone would pass 0 tests.)
+          expected=$(find . -path '*/node_modules' -prune -o -name '*.test.js' -print | wc -l)
+          test "$expected" -gt 0
+          bun test 2>&1 | tee "$RUNNER_TEMP/bun-test.log"
+          summary=$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/bun-test.log" \
+            | grep -E '^Ran [0-9]+ tests? across [0-9]+ files?\.')
+          echo "summary: $summary"
+          ran=$(echo "$summary" | awk '{print $2}')
+          files=$(echo "$summary" | awk '{print $5}')
+          test "$files" -eq "$expected"
+          test "$ran" -gt 0

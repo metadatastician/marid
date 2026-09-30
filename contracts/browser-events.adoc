@@ -70,7 +70,7 @@ canonical JSON envelope:
 
 == Reconnection & Gap Resynchronization
 
-When network disconnections occur, the client browser SDK (`@marid/client`) must resynchronize
+When network disconnections occur, the client browser SDK (`@metadatastician/marid-client`) must resynchronize
 state without duplicate processing or silent data loss:
 
 1. **SSE Reconnection**:
@@ -86,6 +86,6 @@ state without duplicate processing or silent data loss:
 == Client Lifecycle & Unmount Cleanup
 
 1. **Component Unmount Guarantee**:
-   - Framework wrappers (`@marid/react`, `@marid/vue`) must register cleanup callbacks. When a UI component unmounts, the underlying `AbortController` aborts the HTTP/SSE connection within < 5ms.
+   - Framework wrappers (`@metadatastician/marid-react`, `@metadatastician/marid-vue`) must register cleanup callbacks. When a UI component unmounts, the underlying `AbortController` aborts the HTTP/SSE connection within < 5ms.
 2. **Server Resource Reclamation**:
    - The server streaming handler detects disconnection immediately via TCP socket error or channel closure, and notifies `CallContext.cancellation`, stopping backend computation.

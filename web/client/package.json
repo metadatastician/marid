@@ -1,6 +1,6 @@
 {
-  "name": "@marid/client",
-  "version": "0.3.0",
+  "name": "@metadatastician/marid-client",
+  "version": "0.1.0",
   "description": "Framework-independent AffineScript browser client for Marid",
   "main": "src/index.js",
   "module": "src/index.js",

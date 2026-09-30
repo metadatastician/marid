@@ -4,7 +4,7 @@
 import { describe, test, expect } from "bun:test";
 import { MaridClient, NotFoundError, ValidationError, TimeoutError } from "../src/index.js";
 
-describe("@marid/client Unit Tests", () => {
+describe("@metadatastician/marid-client Unit Tests", () => {
   test("fetchJson parses successful JSON responses", async () => {
     const mockFetch = async (url, opts) => {
       return {

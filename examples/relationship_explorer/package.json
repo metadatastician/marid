@@ -1,16 +1,16 @@
 {
-  "name": "@marid/relationship-explorer",
-  "version": "0.3.0",
+  "name": "@metadatastician/marid-relationship-explorer",
+  "version": "0.1.0",
   "description": "Marid reference application exercising ArangoDB and multi-protocol frontends",
   "type": "module",
   "scripts": {
     "test": "bun test"
   },
   "dependencies": {
-    "@marid/client": "workspace:*",
-    "@marid/elements": "workspace:*",
-    "@marid/react": "workspace:*",
-    "@marid/vue": "workspace:*"
+    "@metadatastician/marid-client": "workspace:*",
+    "@metadatastician/marid-elements": "workspace:*",
+    "@metadatastician/marid-react": "workspace:*",
+    "@metadatastician/marid-vue": "workspace:*"
   },
   "author": "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>",
   "license": "MPL-2.0"

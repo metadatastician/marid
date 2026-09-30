@@ -1,0 +1,40 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "marid-web",
+    },
+    "client": {
+      "name": "@metadatastician/marid-client",
+      "version": "0.1.0",
+    },
+    "elements": {
+      "name": "@metadatastician/marid-elements",
+      "version": "0.1.0",
+    },
+    "react": {
+      "name": "@metadatastician/marid-react",
+      "version": "0.1.0",
+      "dependencies": {
+        "@metadatastician/marid-client": "workspace:*",
+      },
+    },
+    "vue": {
+      "name": "@metadatastician/marid-vue",
+      "version": "0.1.0",
+      "dependencies": {
+        "@metadatastician/marid-client": "workspace:*",
+      },
+    },
+  },
+  "packages": {
+    "@metadatastician/marid-client": ["@metadatastician/marid-client@workspace:client"],
+
+    "@metadatastician/marid-elements": ["@metadatastician/marid-elements@workspace:elements"],
+
+    "@metadatastician/marid-react": ["@metadatastician/marid-react@workspace:react"],
+
+    "@metadatastician/marid-vue": ["@metadatastician/marid-vue@workspace:vue"],
+  }
+}

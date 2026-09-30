@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-= @marid/elements (planned)
+= @metadatastician/marid-elements (planned)
 
 Small portable Web Components demonstrator built on Custom Elements,
 properties, DOM events, and explicit styling hooks — not a new

@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 /**
- * @marid/elements
+ * @metadatastician/marid-elements
  * Portable Web Components demonstrator for reactive status and progress display.
  * Authored to standard Custom Elements v1 specs with explicit CSS styling hooks.
  */

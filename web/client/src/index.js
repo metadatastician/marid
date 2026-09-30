@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 /**
- * @marid/client
+ * @metadatastician/marid-client
  * Framework-independent browser client for Marid APIs and event streaming.
  * SSR-safe, cancellation-aware, with RFC 9457 problem details error handling
  * and SSE reconnection with sequence tracking.

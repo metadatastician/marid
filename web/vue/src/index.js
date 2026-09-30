@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 /**
- * @marid/vue
- * Thin Vue 3 integration over @marid/client providing reactive composables
+ * @metadatastician/marid-vue
+ * Thin Vue 3 integration over @metadatastician/marid-client providing reactive composables
  * with automatic onUnmounted lifecycle cleanup.
  */
 
-import { MaridClient } from "../../client/src/index.js";
+import { MaridClient } from "@metadatastician/marid-client";
 
 const MARID_CLIENT_KEY = Symbol("MaridClient");
 
