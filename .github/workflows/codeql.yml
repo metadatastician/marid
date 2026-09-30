@@ -24,12 +24,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Default to `actions` — scaffolded repos rarely have JS/TS
-          # failures on every CodeQL run. The `actions` extractor scans
-          # workflow files which every repo has. Override per-repo if
-          # the scaffolded project actually contains JS/TS code.
+          # `actions` scans the workflow YAML only. marid also ships real
+          # JavaScript (~36 KB: web/*, examples/, test/interop, scripts/),
+          # so scan it too (D63-A, marid#18). CodeQL supports none of Julia,
+          # Idris, Zig, Nickel, Just or Shell, so this matrix covers about
+          # 5% of the program source; that ceiling is recorded, not hidden.
+          #
+          # `rust` is deliberately ABSENT. The two scripts/*.rs files have no
+          # Cargo.toml or rust-project.json, so the extractor runs syntax-only
+          # ("no manifest found: macro expansion will be skipped") and a
+          # planted null-pointer deref went undetected; the same file inside
+          # a Cargo crate was flagged (rust/access-invalid-pointer). A `rust`
+          # entry here would be a green that checks nothing. Add it only with
+          # a manifest and a mutant that proves it fires.
           # Per hypatia rule `codeql_language_matrix_mismatch`.
           - language: actions
+            build-mode: none
+          - language: javascript-typescript
             build-mode: none
     steps:
       - name: Checkout
@@ -37,11 +48,11 @@ jobs:
         with:
           persist-credentials: false
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.0 (4.38.1 blocked estate-wide; nexia-list#100)
+        uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0 (4.38.1 blocked estate-wide; nexia-list#100)
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.0 (4.38.1 blocked estate-wide; nexia-list#100)
+        uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0 (4.38.1 blocked estate-wide; nexia-list#100)
         with:
           category: "/language:${{ matrix.language }}"
