@@ -63,9 +63,18 @@ export class TimeoutError extends MaridError {
   }
 }
 
+// Strip trailing "/" in linear time. `.replace(/\/+$/, "")` is polynomial
+// on a run of slashes that is not at the end (CodeQL js/polynomial-redos,
+// security-severity 7.5).
+function stripTrailingSlashes(s) {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+  return s.slice(0, end);
+}
+
 export class MaridClient {
   constructor(config = {}) {
-    this.baseUrl = (config.baseUrl || "").replace(/\/+$/, "");
+    this.baseUrl = stripTrailingSlashes(config.baseUrl || "");
     this.fetchImpl = config.fetch || (typeof fetch !== "undefined" ? fetch.bind(globalThis) : null);
     this.headers = config.headers || {};
     this.defaultTimeoutMs = config.defaultTimeoutMs || 30000;
