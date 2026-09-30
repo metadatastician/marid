@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: MPL-2.0 for code
+# SPDX-License-Identifier: CC-BY-SA-4.0 for documentation
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+#
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit may REVIEW and COMMENT on this repository. It may not write
+# commits, branches or pull requests (owner ruling D213; hyperpolymath/standards#1085).
+#
+# LIMITS -- this file is a declared baseline, NOT an enforcement point:
+#   * CodeRabbit reads this file from the PR's HEAD branch, so a PR can re-enable
+#     anything below. The authoritative control is the CodeRabbit org Global
+#     Overrides; required_signatures on main is the backstop.
+#   * Autopilot and chat-driven commits ("Commit the changes to this branch",
+#     `@coderabbitai local commit`) have NO schema key and are not governed here.
+#   * Nested keys are not strict: a misspelt key is ignored silently. Keep the
+#     paths exactly as in schema.v2.json.
+
+# The live config source is the Organization UI. Without inheritance this file
+# would REPLACE the org settings (profile, path filters) instead of merging.
+inheritance: true
+
+# Keeps early-access surfaces that can write (e.g. Change Stack) off.
+early_access: false
+
+reviews:
+  finishing_touches:
+    # "Fix failing CI" -- the direct-commit / stacked-PR choice group that
+    # produced the unsigned commit on marid#56.
+    fix_ci:
+      enabled: false
+    # "Push a commit to this branch" / "Create a new PR with the fixes".
+    autofix:
+      enabled: false
+    # Commits a merge commit to the PR branch.
+    resolve_merge_conflict:
+      enabled: false
+    # Commits tests to the PR branch or opens a new PR.
+    unit_tests:
+      enabled: false
+    # Commits docstrings to a new branch and opens a follow-up PR.
+    docstrings:
+      enabled: false
+    # Commits simplifications to the PR branch or opens a new PR.
+    simplify:
+      enabled: false
+    # Under inheritance, arrays APPEND to the parent's list, so this does not
+    # remove org-UI custom recipes; those must be disabled in the org UI.
+    custom: []
