@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // Relationship Explorer frontend in AffineScript (JaffaScript face)
 
-import { MaridClient } from "@marid/client";
+import { MaridClient } from "@metadatastician/marid-client";
 
 export record TaxonView {
     id: string,

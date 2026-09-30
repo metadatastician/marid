@@ -49,7 +49,7 @@ or ingress controller that terminates TLS and negotiates HTTP/2:
 === Envoy (Recommended for Full gRPC and gRPC-Web Support)
 
 Envoy provides built-in native support for the `envoy.filters.http.grpc_web` filter, allowing browser
-clients using `@marid/client` or Connect to seamlessly query backend gRPC services:
+clients using `@metadatastician/marid-client` or Connect to seamlessly query backend gRPC services:
 
 [source,yaml]
 ----

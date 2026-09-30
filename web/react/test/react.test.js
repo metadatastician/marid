@@ -3,9 +3,9 @@
 
 import { describe, test, expect } from "bun:test";
 import { createMaridContext } from "../src/index.js";
-import { MaridClient } from "../../client/src/index.js";
+import { MaridClient } from "@metadatastician/marid-client";
 
-describe("@marid/react Unit Tests", () => {
+describe("@metadatastician/marid-react Unit Tests", () => {
   test("createMaridContext constructs bindings with React shim", () => {
     // Lightweight React mock for testing hook lifecycle
     const mockReact = {

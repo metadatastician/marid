@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-= @marid/react (planned)
+= @metadatastician/marid-react (planned)
 
-Thin React integration over `@marid/client`: ergonomics and lifecycle
+Thin React integration over `@metadatastician/marid-client`: ergonomics and lifecycle
 cleanup, consuming the compiled client through a narrow JavaScript
 interop facade. Unmounting a component cleans up its subscriptions
 (`PROJECT_BRIEF.md` §5).

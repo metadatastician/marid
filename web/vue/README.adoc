@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-= @marid/vue (planned)
+= @metadatastician/marid-vue (planned)
 
-Thin Vue integration over `@marid/client`: ergonomics and lifecycle
+Thin Vue integration over `@metadatastician/marid-client`: ergonomics and lifecycle
 cleanup, consuming the compiled client through a narrow JavaScript
 interop facade. Unmounting a component cleans up its subscriptions
 (`PROJECT_BRIEF.md` §5).

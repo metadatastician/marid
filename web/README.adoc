@@ -16,11 +16,11 @@ ecosystem requires it.
 |===
 | Directory | Package and purpose
 
-| `client/` | `@marid/client` — framework-independent client: cancellation,
+| `client/` | `@metadatastician/marid-client` — framework-independent client: cancellation,
 errors, live subscriptions, reconnect/resynchronization.
-| `react/` | `@marid/react` — thin React integration and lifecycle cleanup.
-| `vue/` | `@marid/vue` — thin Vue integration and lifecycle cleanup.
-| `elements/` | `@marid/elements` — small portable Web Components
+| `react/` | `@metadatastician/marid-react` — thin React integration and lifecycle cleanup.
+| `vue/` | `@metadatastician/marid-vue` — thin Vue integration and lifecycle cleanup.
+| `elements/` | `@metadatastician/marid-elements` — small portable Web Components
 demonstrator; not a new comprehensive widget library.
 |===
 

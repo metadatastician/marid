@@ -4,7 +4,7 @@
 import { describe, test, expect } from "bun:test";
 import { createMaridPlugin, createVueComposables } from "../src/index.js";
 
-describe("@marid/vue Unit Tests", () => {
+describe("@metadatastician/marid-vue Unit Tests", () => {
   test("createMaridPlugin installs client into app", () => {
     const mockApp = {
       provideCalls: [],

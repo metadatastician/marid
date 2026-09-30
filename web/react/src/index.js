@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 /**
- * @marid/react
- * Thin React integration over @marid/client providing ergonomic hooks
+ * @metadatastician/marid-react
+ * Thin React integration over @metadatastician/marid-client providing ergonomic hooks
  * and guaranteed unmount subscription cleanup.
  */
 
-import { MaridClient } from "../../client/src/index.js";
+import { MaridClient } from "@metadatastician/marid-client";
 
 export function createMaridContext(React) {
   const MaridContext = React.createContext(null);

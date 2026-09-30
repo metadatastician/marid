@@ -4,7 +4,7 @@
 import { describe, test, expect } from "bun:test";
 import { MaridProgressElement } from "../src/index.js";
 
-describe("@marid/elements Unit Tests", () => {
+describe("@metadatastician/marid-elements Unit Tests", () => {
   test("Element class is exported and instantiable", () => {
     expect(MaridProgressElement).toBeDefined();
     expect(MaridProgressElement.observedAttributes).toContain("value");

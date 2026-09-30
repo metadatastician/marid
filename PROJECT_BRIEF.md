@@ -263,10 +263,10 @@ The browser language is AffineScript (JaffaScript face, `.affine` sources compil
 
 | Package | Purpose |
 |---|---|
-| `@marid/client` | Framework-independent client, cancellation, errors, live subscriptions, reconnect/resynchronization |
-| `@marid/react` | Thin React integration and lifecycle cleanup |
-| `@marid/vue` | Thin Vue integration and lifecycle cleanup |
-| `@marid/elements` | Small portable Web Components demonstrator; not a new comprehensive widget library |
+| `@metadatastician/marid-client` | Framework-independent client, cancellation, errors, live subscriptions, reconnect/resynchronization |
+| `@metadatastician/marid-react` | Thin React integration and lifecycle cleanup |
+| `@metadatastician/marid-vue` | Thin Vue integration and lifecycle cleanup |
+| `@metadatastician/marid-elements` | Small portable Web Components demonstrator; not a new comprehensive widget library |
 
 The AffineScript client should expose familiar interfaces:
 

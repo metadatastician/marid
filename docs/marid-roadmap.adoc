@@ -38,7 +38,7 @@ independently verifiable work units with explicit acceptance tests.
 | **Gate 4**
 | Assembly & Phase 5 (Frontend)
 | Browser clients, framework integrations, and the canonical reference application.
-| `@marid/client`, `@marid/react`, `@marid/vue`, `@marid/elements`, `relationship_explorer` reference app.
+| `@metadatastician/marid-client`, `@metadatastician/marid-react`, `@metadatastician/marid-vue`, `@metadatastician/marid-elements`, `relationship_explorer` reference app.
 
 | **Gate 5**
 | Release Review (Full Program)
