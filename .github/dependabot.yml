@@ -9,10 +9,20 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # github/codeql-action is bumped by hand, never by Dependabot (D118).
+    # A bump that does not also regenerate .github/workflows/actions.lock
+    # is refused at startup (zero jobs), and v4.38.1 is itself an estate
+    # startup-killer (nexia-list#100); #55 did both. Both halves below are
+    # needed: an `ignore` is BYPASSED inside a `groups:` update, so the
+    # action must be excluded from the group for the ignore to bind.
     groups:
       actions:
         patterns:
           - "*"
+        exclude-patterns:
+          - "github/codeql-action"
+    ignore:
+      - dependency-name: "github/codeql-action"
     open-pull-requests-limit: 2
 
   # Rust/Cargo
