@@ -318,6 +318,17 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
+  # Job 6 (Canon lockstep) removed from this repo, 2026-10-06.
+  #
+  # That job asks "does the TEMPLATE still implement the canon?" — the
+  # canon<->spine binding between hyperpolymath/standards canon.lock and
+  # rsr-template-repo's deed. It was inherited verbatim at instantiation and
+  # demanded .machine_readable/rsr-profile.a2ml, a retired A2ML file (A2ML is
+  # dead; the template itself moved the pin into its deed's (canon …) clause).
+  # A minted repo is not the spine, declares no canon pin, and so failed 100%
+  # of the time. Canon conformance of a minted repo is the RSR conformance
+  # oracle's job (hypatia), not lockstep.
+  # ---------------------------------------------------------------------------
   # Job 7: Dogfooding summary
   # ---------------------------------------------------------------------------
   dogfood-summary:
