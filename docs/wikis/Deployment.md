@@ -34,7 +34,7 @@ No charter requirement is waived by the successful local unary slice.
 ## Trust boundary
 
 ```
-client -> evaluated TLS ingress -> gateway:4000 -> marid:8080
+client -> evaluated TLS ingress -> gateway:4000 -> marid:6274
                                     YAML          private backend network
 ```
 
@@ -58,8 +58,8 @@ Run it:
 ```bash
 julia --startup-file=no scripts/bootstrap.jl examples/http_json
 julia --startup-file=no --project=examples/http_json examples/http_json/test/runtests.jl
-MARID_HOST=127.0.0.1 MARID_PORT=8080 julia --startup-file=no --project=examples/http_json examples/http_json/server.jl
-curl -i -H 'Content-Type: application/json' --data '"hello"' http://127.0.0.1:8080/api/echo
+MARID_HOST=127.0.0.1 MARID_PORT=6274 julia --startup-file=no --project=examples/http_json examples/http_json/server.jl
+curl -i -H 'Content-Type: application/json' --data '"hello"' http://127.0.0.1:6274/api/echo
 ```
 
 The test suite uses real sockets, the HTTP.jl client, a raw chunked socket and curl. It verifies routing, JSON escaping, `q=0` rejection, error paths, bounded request body, error redaction, cooperative deadline, explicit draining and listener shutdown.
@@ -136,8 +136,8 @@ Recorded local result: seven Bun tests / 47 assertions across the two processes,
 
 | Service | Image variable | Ports | Networks | Notes |
 |---|---|---|---|---|
-| `http-capability-gateway` | `HTTP_CAPABILITY_GATEWAY_IMAGE` | `127.0.0.1:8088:4000` | `edge`, `backend` | Env `POLICY_PATH=/etc/marid/policy.yaml`, `BACKEND_URL=http://marid:8080`, `PORT=4000`, `TRUST_LEVEL_SOURCE=header`; read-only bind of `./policy.yaml` with `create_host_path: false`; healthcheck `wget http://127.0.0.1:4000/ready`; `cap_drop: [ALL]`, `no-new-privileges` |
-| `marid` | `MARID_APP_IMAGE` | `expose: ["8080"]` only, no host port | `backend` | Entrypoint must serve HTTP on `0.0.0.0:8080`; `cap_drop: [ALL]`, `no-new-privileges` |
+| `http-capability-gateway` | `HTTP_CAPABILITY_GATEWAY_IMAGE` | `127.0.0.1:6276:4000` | `edge`, `backend` | Env `POLICY_PATH=/etc/marid/policy.yaml`, `BACKEND_URL=http://marid:6274`, `PORT=4000`, `TRUST_LEVEL_SOURCE=header`; read-only bind of `./policy.yaml` with `create_host_path: false`; healthcheck `wget http://127.0.0.1:4000/ready`; `cap_drop: [ALL]`, `no-new-privileges` |
+| `marid` | `MARID_APP_IMAGE` | `expose: ["6274"]` only, no host port | `backend` | Entrypoint must serve HTTP on `0.0.0.0:6274`; `cap_drop: [ALL]`, `no-new-privileges` |
 
 The `backend` network is `internal: true`. There are no database or application host ports, no host networking and no container socket.
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 // Real HTTP -> Cowboy gateway -> Req proxy -> Julia HTTP.jl/Core -> JSON3.
 import { beforeAll, afterAll, test, expect } from "bun:test";
-const base = process.env.MARID_GATEWAY_URL || "http://127.0.0.1:8088";
+const base = process.env.MARID_GATEWAY_URL || "http://127.0.0.1:6276";
 let initialWrites;
 
 /**

@@ -20,18 +20,18 @@ services:
       dockerfile: build/container/Containerfile
     image: ghcr.io/metadatastician/myproject-api:latest
     ports:
-      - "8080:8080"
+      - "6274:6274"
     environment:
       RUST_LOG: "info"
       APP_HOST: "[::]"
-      APP_PORT: "8080"
+      APP_PORT: "6274"
       APP_LOG_FORMAT: "json"
       APP_DATA_DIR: "/data"
     volumes:
       - api-data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:6274/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -42,7 +42,7 @@ services:
     ports:
       - "4000:4000"
     environment:
-      API_URL: "http://rust-api:8080/api/v1"
+      API_URL: "http://rust-api:6274/api/v1"
       MIX_ENV: "prod"
       APP_LOG_FORMAT: "json"
       POOL_SIZE: "10"
@@ -60,10 +60,10 @@ services:
   rokur:
     image: ghcr.io/metadatastician/rokur:latest
     ports:
-      - "8081:8081"
+      - "6275:6275"
     environment:
-      ROKUR_BACKEND: "http://rust-api:8080"
-      ROKUR_LISTEN: "[::]:8081"
+      ROKUR_BACKEND: "http://rust-api:6274"
+      ROKUR_LISTEN: "[::]:6275"
       ROKUR_REQUIRED_SECRETS: "DATABASE_URL,JWT_SIGNING_KEY"
       ROKUR_AUDIT_LOG: "/var/log/rokur/audit.jsonl"
       ROKUR_LOG_FORMAT: "json"
@@ -74,7 +74,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8081/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:6275/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -87,7 +87,7 @@ services:
       - "443:443"
       - "80:80"
     environment:
-      SVALINN_BACKEND: "http://rokur:8081"
+      SVALINN_BACKEND: "http://rokur:6275"
       SVALINN_WORKER_BACKEND: "http://elixir-worker:4000"
       SVALINN_POLICY_FILE: "/etc/svalinn/gatekeeper.yaml"
       SVALINN_TLS_AUTO: "true"

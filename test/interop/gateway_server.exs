@@ -4,7 +4,7 @@
 for {key, value} <- [
   policy_path: System.fetch_env!("POLICY_PATH"),
   backend_url: System.fetch_env!("BACKEND_URL"),
-  port: String.to_integer(System.get_env("PORT", "8088")),
+  port: String.to_integer(System.get_env("PORT", "6276")),
   strip_trust_header: true,
   trusted_proxies: [], # Loopback tests must not accidentally trust forged headers.
   rate_limits: %{untrusted: {10_000, 10_000}, authenticated: {10_000, 10_000}, internal: :unlimited}

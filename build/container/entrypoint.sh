@@ -29,7 +29,7 @@ trap cleanup TERM INT
 
 echo "Starting marid..."
 echo "  Host: ${APP_HOST:-[::]}"
-echo "  Port: ${APP_PORT:-8080}"
+echo "  Port: ${APP_PORT:-6274}"
 echo "  Data: ${APP_DATA_DIR:-/data}"
 echo "  Log:  ${APP_LOG_FORMAT:-json}"
 

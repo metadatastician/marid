@@ -25,13 +25,13 @@ version = "0.1.0"
 
 [health]
 # Primary health endpoint — must return 2xx.
-endpoint = "http://localhost:8080/health"
+endpoint = "http://localhost:6274/health"
 interval = "30s"
 timeout = "5s"
 failure_threshold = 3
 
 # Readiness endpoint — checked during startup and after restarts.
-readiness_endpoint = "http://localhost:8080/ready"
+readiness_endpoint = "http://localhost:6274/ready"
 readiness_timeout = "10s"
 
 # Action on failure: "alert" (log + notify) or "restart" (alert + restart).
@@ -42,7 +42,7 @@ on_failure = "alert"
 # endpoint-level health checks for the secrets gate and the edge gateway.
 [[health.extra]]
 name = "rokur"
-endpoint = "http://localhost:8081/health"
+endpoint = "http://localhost:6275/health"
 interval = "30s"
 timeout = "5s"
 failure_threshold = 3

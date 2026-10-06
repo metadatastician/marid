@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 // Run only AFTER the test backend has stopped, while the gateway is still up.
 import { test, expect } from "bun:test";
-const base = process.env.MARID_GATEWAY_URL || "http://127.0.0.1:8088";
+const base = process.env.MARID_GATEWAY_URL || "http://127.0.0.1:6276";
 test("backend outage is 502 while policy denial remains local", async () => {
   const allowed = await fetch(`${base}/api/status`);
   expect(allowed.status).toBe(502);

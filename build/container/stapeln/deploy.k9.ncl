@@ -95,7 +95,7 @@ let deployment = {
   # Container configuration
   container = {
     image = "ghcr.io/metadatastician/marid",
-    port = 8080,
+    port = 6274,
     health_check = "/health",
     readiness_check = "/ready",
   },

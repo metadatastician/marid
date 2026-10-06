@@ -26,17 +26,17 @@ services:
       dockerfile: build/container/Containerfile
     image: "ghcr.io/metadatastician/marid:latest"
     ports:
-      - "8080:8080"
+      - "6274:6274"
     environment:
       APP_HOST: "[::]"
-      APP_PORT: "8080"
+      APP_PORT: "6274"
       APP_LOG_FORMAT: "json"
       APP_DATA_DIR: "/data"
     volumes:
       - "marid-data:/data"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:6274/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -50,13 +50,13 @@ services:
   rokur:
     image: ghcr.io/metadatastician/rokur:latest
     environment:
-      ROKUR_BACKEND: "http://marid:8080"
-      ROKUR_LISTEN: "[::]:8081"
+      ROKUR_BACKEND: "http://marid:6274"
+      ROKUR_LISTEN: "[::]:6275"
       ROKUR_REQUIRED_SECRETS: ""        # comma-separated env names that MUST be set
       ROKUR_AUDIT_LOG: "/var/log/rokur/audit.jsonl"
       ROKUR_LOG_FORMAT: "json"
     ports:
-      - "8081:8081"
+      - "6275:6275"
     volumes:
       - rokur-audit:/var/log/rokur
     depends_on:
@@ -64,7 +64,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8081/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:6275/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -80,7 +80,7 @@ services:
       - "443:443"
       - "80:80"
     environment:
-      SVALINN_BACKEND: "http://rokur:8081"
+      SVALINN_BACKEND: "http://rokur:6275"
       SVALINN_POLICY_FILE: "/etc/svalinn/gatekeeper.yaml"
       SVALINN_TLS_AUTO: "true"
     volumes:
@@ -105,7 +105,7 @@ services:
       - "4000:4000"
     environment:
       POLICY_PATH: "/app/config/policy.yaml"
-      BACKEND_URL: "http://marid:8080"
+      BACKEND_URL: "http://marid:6274"
       PORT: "4000"
       TRUST_LEVEL_HEADER: "x-trust-level"
     volumes:

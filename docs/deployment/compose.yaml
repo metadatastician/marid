@@ -4,10 +4,10 @@ services:
   http-capability-gateway:
     image: "${HTTP_CAPABILITY_GATEWAY_IMAGE:?Set a reviewed patched gateway image digest}"
     ports:
-      - "127.0.0.1:8088:4000"
+      - "127.0.0.1:6276:4000"
     environment:
       POLICY_PATH: /etc/marid/policy.yaml
-      BACKEND_URL: http://marid:8080
+      BACKEND_URL: http://marid:6274
       PORT: "4000"
       TRUST_LEVEL_SOURCE: header
       # Image config must set strip_trust_header: true and trusted_proxies: [].
@@ -35,9 +35,9 @@ services:
 
   marid:
     image: "${MARID_APP_IMAGE:?Set a tested application image digest}"
-    # Image entrypoint must serve actual HTTP on 0.0.0.0:8080.
+    # Image entrypoint must serve actual HTTP on 0.0.0.0:6274.
     # No host ports: all external application traffic must cross governance.
-    expose: ["8080"]
+    expose: ["6274"]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
