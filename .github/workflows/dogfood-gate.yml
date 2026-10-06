@@ -44,7 +44,7 @@ jobs:
 
       - name: Validate DEED manifests
         if: steps.detect.outputs.count > 0
-        uses: hyperpolymath/deed-ecosystem/validate-action@main
+        uses: hyperpolymath/deed-ecosystem/validate-action@3e69929a4b0b5610b477732ee125a156cbc8a040 # main @ 2026-10-03
         with:
           path: '.'
           strict: 'false'
@@ -93,7 +93,7 @@ jobs:
 
       - name: Validate K9 contracts
         if: steps.detect.outputs.k9_count > 0
-        uses: hyperpolymath/k9-ecosystem/validate-action@main
+        uses: hyperpolymath/k9-ecosystem/validate-action@20f6be5b5a14a48680b236955b5c4ad9033d00d4 # main @ 2026-10-01
         with:
           path: '.'
           strict: 'false'
@@ -402,7 +402,7 @@ jobs:
 
           | Tool/Format | Status | Notes |
           |-------------|--------|-------|
-          | DEED repo deed (`<reponame>_chora.deed`) | ${DEED_STATUS} | Required for all RSR repos |
+          | DEED repo deed (\`<reponame>_chora.deed\`) | ${DEED_STATUS} | Required for all RSR repos |
           | K9 contracts | ${K9_STATUS} | Required for repos with config files |
           | .editorconfig | ${EC_STATUS} | Required for all repos |
           | Groove endpoint | ${GROOVE_STATUS} | Required for service repos |

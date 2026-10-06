@@ -212,11 +212,12 @@ Recommendations:
 * Fuzz: exact target time + 2 min tolerance.
 
 === 7. Reusable workflow (longer-term)
-
-Ship the above patterns in a single reusable workflow under
-`marid/.github/workflows/rsr-ci-defaults.yml`, and adopt
-it estate-wide via `uses: metadatastician/marid/.github/workflows/rsr-ci-defaults.yml@main`
-in downstream repos. Single PR propagates improvements.
+PROPOSAL, NOT IMPLEMENTED. The patterns above could be shipped as one reusable
+workflow (a `rsr-ci-defaults.yml` under this repository's `.github/workflows/`)
+and adopted downstream with a `uses:` reference. No such file exists today, so
+do not add a `uses:` line pointing at it: a `uses:` of a workflow that does not
+exist, or that lacks a `workflow_call` trigger, kills the caller at startup
+(`jobs=0`, no annotation). Tracked as marid#50.
 
 === 8. Self-hosted runner for heavy work (long-term)
 

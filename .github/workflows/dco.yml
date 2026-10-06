@@ -34,7 +34,7 @@ jobs:
           echo "Checking commits from $BASE_SHA to $HEAD_SHA for DCO sign-offs..."
           
           FAILED=0
-          for commit in $(git rev-list "$BASE_SHA..$HEAD_SHA"); do
+          for commit in $(git rev-list --no-merges "$BASE_SHA..$HEAD_SHA"); do
             msg=$(git log -1 --format="%B" "$commit")
             if ! echo "$msg" | grep -qE "^Signed-off-by: .+ <.+@.+>$"; then
               echo "::error::Commit $commit is missing DCO sign-off: Signed-off-by: Name <email>"
