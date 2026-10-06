@@ -12,8 +12,8 @@ is claimed by this example. Code samples are MPL-2.0.
 ----
 julia --startup-file=no scripts/bootstrap.jl examples/http_json
 julia --startup-file=no --project=examples/http_json examples/http_json/test/runtests.jl
-MARID_HOST=127.0.0.1 MARID_PORT=8080 julia --startup-file=no --project=examples/http_json examples/http_json/server.jl
-curl -i -H 'Content-Type: application/json' --data '"hello"' http://127.0.0.1:8080/api/echo
+MARID_HOST=127.0.0.1 MARID_PORT=6274 julia --startup-file=no --project=examples/http_json examples/http_json/server.jl
+curl -i -H 'Content-Type: application/json' --data '"hello"' http://127.0.0.1:6274/api/echo
 ----
 
 `/api/echo` POST accepts and returns a JSON string. `/api/status` GET reports the

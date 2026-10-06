@@ -107,13 +107,14 @@ repo-init archetype="":
         echo "── Container configuration (optional) ─────────"
         read -rp "Service name [${REPO}]: " _SERVICE_NAME
         SERVICE_NAME="${_SERVICE_NAME:-${REPO}}"
-        read -rp "Primary port [8080]: " _PORT
-        PORT="${_PORT:-8080}"
+        # Default port 6274 (keypad "MARI"): IANA-unassigned, not 8080-class (D228).
+        read -rp "Primary port [6274]: " _PORT
+        PORT="${_PORT:-6274}"
         read -rp "Container registry [ghcr.io/${OWNER}]: " _REGISTRY
         REGISTRY="${_REGISTRY:-ghcr.io/${OWNER}}"
     else
         SERVICE_NAME="${REPO}"
-        PORT="8080"
+        PORT="6274"
         REGISTRY="ghcr.io/${OWNER}"
     fi
 

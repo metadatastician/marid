@@ -62,8 +62,10 @@ container-init:
     read -rp "Service name (e.g. my-api) [marid]: " _SERVICE_NAME
     SERVICE_NAME="${_SERVICE_NAME:-marid}"
 
-    read -rp "Primary port [8080]: " _PORT
-    PORT="${_PORT:-8080}"
+    # Default port 6274 (keypad "MARI"): IANA-unassigned (6270-6299), registered
+    # range, not 8080-class (D228 / marid#51). Siblings: rokur 6275, gateway 6276.
+    read -rp "Primary port [6274]: " _PORT
+    PORT="${_PORT:-6274}"
 
     read -rp "Container registry [ghcr.io/${OWNER:-metadatastician}]: " _REGISTRY
     REGISTRY="${_REGISTRY:-ghcr.io/${OWNER:-metadatastician}}"

@@ -15,7 +15,7 @@ this guide assumes. A gateway or image built before that commit still rejects em
 a deployment, TLS, persistence or load acceptance claim.
 
 ....
-client -> evaluated TLS ingress -> gateway:4000 -> marid:8080
+client -> evaluated TLS ingress -> gateway:4000 -> marid:6274
                                     YAML          private backend network
 ....
 
@@ -122,7 +122,7 @@ forwarding of an oversized request. See the evidence ledger for counts and failu
 
 Set `MARID_APP_IMAGE` and `HTTP_CAPABILITY_GATEWAY_IMAGE` to reviewed immutable image
 digests. There are deliberately no invented registry defaults. The app image must
-load the real listener on `0.0.0.0:8080`; the gateway image must include the paired
+load the real listener on `0.0.0.0:6274`; the gateway image must include the paired
 patch, evaluated trust configuration and `wget` for this health check.
 
 [source,yaml]

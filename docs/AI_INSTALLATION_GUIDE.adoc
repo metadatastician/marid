@@ -91,7 +91,7 @@ The prompts, in order, are:
 | 13 | Website URL (blank = default)
 | 14 | OpenSSF Best Practices ID (blank = none)
 | 15 | Service name (blank = default)
-| 16 | Primary port (blank = 8080)
+| 16 | Primary port (blank = 6274)
 | 17 | Container registry (blank = default)
 | 18 | Proceed? — answer `y`
 |===

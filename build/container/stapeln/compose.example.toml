@@ -22,16 +22,16 @@ version = "1.0"
 [services.rust-api]
 image = "ghcr.io/metadatastician/myproject-api:latest.ctp"
 
-# Map host port 8080 to container port 8080.
-# Use ["[::]:8080:8080"] for explicit IPv6 binding.
-ports = ["8080:8080"]
+# Map host port 6274 to container port 6274.
+# Use ["[::]:6274:6274"] for explicit IPv6 binding.
+ports = ["6274:6274"]
 
 # Environment variables passed into the container at startup.
 # These override defaults in the Containerfile ENV directives.
 environment = {
   RUST_LOG = "info",                  # Rust log level (trace, debug, info, warn, error)
   APP_HOST = "[::]",                  # Listen on all interfaces (IPv4 + IPv6)
-  APP_PORT = "8080",                  # Internal container port
+  APP_PORT = "6274",                  # Internal container port
   APP_LOG_FORMAT = "json",            # Structured logging for selur/vordr
   APP_DATA_DIR = "/data",             # Persistent data directory (matches VOLUME)
 }
@@ -46,7 +46,7 @@ restart = "always"
 
 # Health check: selur/Podman uses this to determine if the service is ready.
 # The service must respond 2xx to this endpoint within the timeout.
-healthcheck = { test = "curl -sf http://localhost:8080/health", interval = "30s", timeout = "5s", retries = 3 }
+healthcheck = { test = "curl -sf http://localhost:6274/health", interval = "30s", timeout = "5s", retries = 3 }
 
 # ---
 
@@ -61,7 +61,7 @@ ports = ["4000:4000"]
 # The worker connects to the Rust API over the internal selur network.
 # Service names resolve as hostnames within the compose network.
 environment = {
-  API_URL = "http://rust-api:8080/api/v1",   # Internal service discovery
+  API_URL = "http://rust-api:6274/api/v1",   # Internal service discovery
   MIX_ENV = "prod",                           # Elixir release mode
   APP_LOG_FORMAT = "json",                    # Match structured logging format
   POOL_SIZE = "10",                           # DB connection pool size
@@ -92,7 +92,7 @@ ports = ["443:443", "80:80"]
 
 environment = {
   # Backend routing: svalinn proxies to internal services.
-  SVALINN_BACKEND = "http://rust-api:8080",
+  SVALINN_BACKEND = "http://rust-api:6274",
   SVALINN_WORKER_BACKEND = "http://elixir-worker:4000",
 
   # Policy file: mounted from the svalinn-config volume.

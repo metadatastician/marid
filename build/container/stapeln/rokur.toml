@@ -25,9 +25,9 @@ version = "0.1.0"
 
 [server]
 # Address rokur listens on (inside the container).
-listen = "[::]:8081"
+listen = "[::]:6275"
 # The upstream application rokur fronts once the gate is satisfied.
-backend = "http://marid:8080"
+backend = "http://marid:6274"
 # Health/readiness endpoints rokur exposes for vordr / orchestrators.
 health_path = "/health"
 ready_path = "/ready"

@@ -45,7 +45,7 @@ function _read_request(stream, max_body_bytes)
 end
 
 """
-    serve_http(handler; host="127.0.0.1", port=8080, max_body_bytes=1048576,
+    serve_http(handler; host="127.0.0.1", port=6274, max_body_bytes=1048576,
                readtimeout=5, on_shutdown=nothing)
 
 Start an HTTP.jl HTTP/1.1 listener and return its closable server handle. `handler`
@@ -58,7 +58,7 @@ Throw `ArgumentError` unless `max_body_bytes` is positive and below `typemax(Int
 or when `readtimeout` is not positive. This is bounded unary HTTP, not SSE, WebSocket
 or HTTP/2 support. Use `0.0.0.0` explicitly for container deployment.
 """
-function serve_http(handler::Function; host="127.0.0.1", port::Integer=8080,
+function serve_http(handler::Function; host="127.0.0.1", port::Integer=6274,
                     max_body_bytes::Integer=1048576, readtimeout::Integer=5, on_shutdown=nothing)
     0 < max_body_bytes < typemax(Int) || throw(ArgumentError("Invalid body limit"))
     readtimeout > 0 || throw(ArgumentError("Read timeout must be positive"))

@@ -29,7 +29,7 @@ describe("Relationship Explorer Frontend Integration", () => {
       };
     };
 
-    const client = new MaridClient({ baseUrl: "http://127.0.0.1:8080", fetch: mockFetch });
+    const client = new MaridClient({ baseUrl: "http://127.0.0.1:6274", fetch: mockFetch });
     const res = await client.fetchJson("/api/v1/analysis", { method: "POST" });
     expect(res.type).toBe("result");
     expect(res.parsimony_score).toBe(3.0);
