@@ -40,7 +40,7 @@ jobs:
 
       - name: "🟡 CHECK: Validate K9 contracts"
         if: steps.detect.outputs.k9_count > 0
-        uses: hyperpolymath/k9-ecosystem/validate-action@main
+        uses: hyperpolymath/k9-ecosystem/validate-action@20f6be5b5a14a48680b236955b5c4ad9033d00d4 # main @ 2026-10-01
         with:
           path: '.'
           strict: 'false'

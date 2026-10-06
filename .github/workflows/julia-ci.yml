@@ -72,6 +72,8 @@ jobs:
           version: '1.10.10'
       - name: Check Julia [compat] entries (marid#22 / D68)
         run: julia --startup-file=no scripts/check-julia-compat.jl
+      - name: Check every package precompiles and loads (marid#40)
+        run: julia --startup-file=no scripts/check-packages-precompile.jl
       - name: Verify CLI Capability Spec Generation
         run: |
           ./scripts/marid generate capability-spec fixtures/capability/service.jl \
