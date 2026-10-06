@@ -317,6 +317,31 @@ To stay informed about security updates:
 | **Medium** | Included in next scheduled release (or earlier) |
 | **Low** | Included in next scheduled release |
 
+### Advisories against hand-pinned actions (D118)
+
+`github/codeql-action` is excluded from Dependabot version updates and from the
+`actions` update group (`.github/dependabot.yml`, owner ruling D118), so a
+security advisory against it does **not** arrive as a Dependabot pull request.
+The path from advisory to fix is:
+
+- **Signal.** A Dependabot alert on this repository for the `github-actions`
+  ecosystem, or a GitHub Security Advisory (GHSA) naming `github/codeql-action`.
+  The `ignore` rule suppresses update pull requests only; alerts still fire.
+  Evidence that the signal is live with the ignore in place, measured
+  2026-10-06: `gh api repos/metadatastician/marid/vulnerability-alerts` returns
+  HTTP 204 (alerts enabled) and the open-alert count was 0.
+- **Who acts.** The repository maintainer (the owner) opens the bump by hand.
+  No bot opens it.
+- **One pull request.** The `uses:` bump for `github/codeql-action/init` and
+  `github/codeql-action/analyze` and the regenerated
+  `.github/workflows/actions.lock` (`gh actions-lock --no-narrow`) land in the
+  same pull request. A bump that lands without the lock is refused at workflow
+  startup (zero jobs), so the two never travel separately.
+- **Timeline.** As in the Update Policy table above: Critical/High as soon as
+  the pinned release exists, otherwise with the next scheduled release.
+
+Tracked as metadatastician/marid#59.
+
 ### Supported Versions
 
 <!-- Adjust this table to match your actual version support policy -->
