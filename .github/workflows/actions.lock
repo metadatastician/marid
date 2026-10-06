@@ -17,15 +17,15 @@ workflows:
         - 'actions/checkout@v7.0.1'
     '.github/workflows/deed-validate.yml':
         - 'actions/checkout@v7.0.1'
-        - 'hyperpolymath/deed-ecosystem@main'
+        - 'hyperpolymath/deed-ecosystem@3e69929a4b0b5610b477732ee125a156cbc8a040'
     '.github/workflows/dependabot-automerge.yml':
         - 'dependabot/fetch-metadata@v3.1.0'
     '.github/workflows/docker-build.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/dogfood-gate.yml':
         - 'actions/checkout@v7.0.1'
-        - 'hyperpolymath/deed-ecosystem@main'
-        - 'hyperpolymath/k9-ecosystem@main'
+        - 'hyperpolymath/deed-ecosystem@3e69929a4b0b5610b477732ee125a156cbc8a040'
+        - 'hyperpolymath/k9-ecosystem@20f6be5b5a14a48680b236955b5c4ad9033d00d4'
     '.github/workflows/dogfood-summary.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/dot-wellknown-enforcement.yml':
@@ -49,7 +49,7 @@ workflows:
         - 'julia-actions/setup-julia@v3.0.2'
     '.github/workflows/k9-validate.yml':
         - 'actions/checkout@v7.0.1'
-        - 'hyperpolymath/k9-ecosystem@main'
+        - 'hyperpolymath/k9-ecosystem@20f6be5b5a14a48680b236955b5c4ad9033d00d4'
     '.github/workflows/label-triage.yml': []
     '.github/workflows/labels.yml': []
     '.github/workflows/lock-sync-gate.yml': []
@@ -235,14 +235,14 @@ dependencies:
         commit: 'sha1-af7062381f7ae5f731c12051a671a373c72d7541'
         owner_id: 6759885
         repo_id: 1326697643
-    'hyperpolymath/deed-ecosystem@main':
+    'hyperpolymath/deed-ecosystem@3e69929a4b0b5610b477732ee125a156cbc8a040':
         ref: 'main'
-        commit: 'sha1-ed83d6927e8fb21431e403dbf6d7a4af96772746'
+        commit: 'sha1-3e69929a4b0b5610b477732ee125a156cbc8a040'
         owner_id: 6759885
         repo_id: 1275649586
-    'hyperpolymath/k9-ecosystem@main':
+    'hyperpolymath/k9-ecosystem@20f6be5b5a14a48680b236955b5c4ad9033d00d4':
         ref: 'main'
-        commit: 'sha1-6dde9fbb5aa3524c8fa740204b50405ec4e21c8c'
+        commit: 'sha1-20f6be5b5a14a48680b236955b5c4ad9033d00d4'
         owner_id: 6759885
         repo_id: 1275650185
     'hyperpolymath/smtp-notify-action@v0.3.0':
