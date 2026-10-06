@@ -24,7 +24,7 @@ DOCS_DIR="$REPO_ROOT/docs"
 
 # Justified exceptions, relative to repo root. Empty by default.
 ALLOWED=()
-ALLOWED_DIRS=("docs/berrywiki/")
+ALLOWED_DIRS=("docs/berrywiki/" "docs/wikis/")
 
 if [ ! -d "$DOCS_DIR" ]; then
     echo "PASS: no docs/ directory (nothing to check)"

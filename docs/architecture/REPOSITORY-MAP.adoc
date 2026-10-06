@@ -282,7 +282,6 @@ your own repo - but do not read their emptiness as neglect here.
 | `docs/whitepapers/academic/`
 | `docs/whitepapers/industry/`
 | `docs/whitepapers/outreach/`
-| `docs/wikis/`
 | `features/boj-server/`
 | `features/panic-attacker/`
 | `src/aspects/`
