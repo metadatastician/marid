@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# Manifest for the two std-only Rust scripts in this directory.
+#
+# It exists so CodeQL's Rust extractor can resolve the crate (marid#62). With
+# no Cargo.toml or rust-project.json the extractor runs syntax-only and skips
+# macro expansion, which hid a planted null-pointer dereference.
+#
+# It does NOT change how the scripts are built or run: `just repo-init` still
+# compiles each file directly with `rustc` via scripts/rust-tool.sh. It lives
+# here rather than at the repo root because release.yml treats a root
+# Cargo.toml as "this is a Rust project" and switches to `cargo build --release`.
+
+[package]
+name = "marid-scripts"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "prune-dependabot-ecosystems"
+path = "prune-dependabot-ecosystems.rs"
+
+[[bin]]
+name = "strip-instruction-blocks"
+path = "strip-instruction-blocks.rs"

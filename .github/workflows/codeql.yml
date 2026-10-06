@@ -30,17 +30,19 @@ jobs:
           # Idris, Zig, Nickel, Just or Shell, so this matrix covers about
           # 5% of the program source; that ceiling is recorded, not hidden.
           #
-          # `rust` is deliberately ABSENT. The two scripts/*.rs files have no
-          # Cargo.toml or rust-project.json, so the extractor runs syntax-only
+          # `rust` covers the two scripts/*.rs files through scripts/Cargo.toml
+          # (marid#62). Without that manifest the extractor runs syntax-only
           # ("no manifest found: macro expansion will be skipped") and a
-          # planted null-pointer deref went undetected; the same file inside
-          # a Cargo crate was flagged (rust/access-invalid-pointer). A `rust`
-          # entry here would be a green that checks nothing. Add it only with
-          # a manifest and a mutant that proves it fires.
+          # planted null-pointer deref went undetected. With it, CLI 2.27.1
+          # flagged the same plant (rust/access-invalid-pointer) and the clean
+          # tree reported 0 results. Deleting scripts/Cargo.toml turns this
+          # entry back into a green that checks nothing.
           # Per hypatia rule `codeql_language_matrix_mismatch`.
           - language: actions
             build-mode: none
           - language: javascript-typescript
+            build-mode: none
+          - language: rust
             build-mode: none
     steps:
       - name: Checkout
