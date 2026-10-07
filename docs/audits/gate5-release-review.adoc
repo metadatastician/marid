@@ -101,10 +101,10 @@ When the user initiates the polyrepo split, the monorepo packages will be extrac
 
 ```
 Phase 1: Leaf Packages (Zero Inter-Marid Dependencies)
-  ├── 1. hyperpolymath/MaridIR.jl        (UUID: 0aa8228c-ae90-54ec-b99f-6e73e9362e55)
-  ├── 2. hyperpolymath/MaridCodec.jl     (UUID: eca7d35b-6611-5bf5-a92e-bc308a796804)
-  ├── 3. hyperpolymath/ArangoDB.jl       (UUID: 719c9fe8-89eb-588d-a237-0159f38ee2e4)
-  └── 4. hyperpolymath/MaridTransport.jl (UUID: 9b56d6cb-8332-56b5-a8cb-605b4eec7468)
+  ├── 1. hyperpolymath/MaridIR.jl        (UUID: 01a115b4-723a-8911-b469-7c18b764c41a)
+  ├── 2. hyperpolymath/MaridCodec.jl     (UUID: 01a115b0-6977-8194-b1bb-ba277a2ddf75)
+  ├── 3. hyperpolymath/ArangoDB.jl       (UUID: 01a115ae-6523-8273-8497-753822252d6a)
+  └── 4. hyperpolymath/MaridTransport.jl (UUID: 01a115ba-7f33-8545-9989-732142b76ec2)
 
 Phase 2: Core Data Plane & Schema Generators
   ├── 5. hyperpolymath/MaridCore.jl      (depends on MaridIR)
@@ -124,6 +124,8 @@ Phase 4: Browser Edge Packages (npm / Bun Registry)
 Phase 5: Reference Application & Umbrella Framework
   └── 14. hyperpolymath/marid (Reference Application & Umbrella Meta-Package)
 ```
+
+NOTE: The UUIDs above were re-minted on 2026-10-07 as ADR-008 profile-T UUIDv8 (D320/D322), before any registration. The original v5-shaped UUIDs were never registered anywhere. `ArangoDB.jl` is now `packages/MaridArango` (D57).
 
 === Git Subtree Extraction Recipe
 

@@ -1,6 +1,6 @@
 <!-- berrywiki
-id: 6d617269-6400-7000-8000-000000000009
-parent: 6d617269-6400-7000-8000-000000000001
+id: 01a115aa-ca31-8706-94f3-3b3932a0105c
+parent: 01a115aa-ca16-8134-837f-254d19a045bf
 position: 80
 kind: page
 tags:
@@ -155,7 +155,7 @@ The ordered-checkpoints report adds, for later phases: "Real persistence, browse
 Recorded rather than silently corrected:
 
 - `docs/audits/README.adoc` ends with "Status: Gate 0 not yet started; no audit documents exist yet." Nine audit documents exist in the same directory, including both Gate 0 deliverables the README names.
-- `docs/audits/feasibility.adoc` and `docs/audits/recon-2026-09-19.adoc` name the Arango client `ArangoDB.jl` at `packages/ArangoDB/`, and the recon's repository map has a row headed "ArangoDB". The directory is now `packages/MaridArango/` and the package is `MaridArango` (UUID `719c9fe8-89eb-588d-a237-0159f38ee2e4`, unchanged). The feasibility registry check for the name `ArangoDB` therefore refers to a name the project no longer intends to register.
+- `docs/audits/feasibility.adoc` and `docs/audits/recon-2026-09-19.adoc` name the Arango client `ArangoDB.jl` at `packages/ArangoDB/`, and the recon's repository map has a row headed "ArangoDB". The directory is now `packages/MaridArango/` and the package is `MaridArango` (UUID `01a115ae-6523-8273-8497-753822252d6a`, unchanged). The feasibility registry check for the name `ArangoDB` therefore refers to a name the project no longer intends to register.
 - `docs/audits/recon-2026-09-19.adoc` links the inspected tree, Actions runs and API endpoints under `github.com/hyperpolymath/marid` and `api.github.com/repos/hyperpolymath/marid`. The repository is `github.com/metadatastician/marid`. The SHAs cited (`96cfea4c8eac855263bcfb47ca9f53fe7a893f34`, run ids 35433279958 to 35433280923) remain valid identifiers of what was inspected; only the owner segment of the URLs is stale. The gateway URL under `hyperpolymath/http-capability-gateway` is a different repository and is not affected.
 - `docs/audits/feasibility.adoc` cites estate policy as `ANCHOR.a2ml`. Zero `.a2ml` files exist in the repository (confirmed locally while writing this page: `find . -name '*.a2ml'` returns nothing outside `.git`); the format was replaced by `.deed`. The ledger's own statement "Zero `.a2ml` files remain" is consistent with this.
 - `docs/audits/ordered-checkpoints-2026-09-19.adoc` says "All changes are local, uncommitted and unpushed." The ledger's follow-up section describes the squash of PR #1 as `39d250a` on `main`, so the work has since landed; the sentence describes the state at delivery, not now.

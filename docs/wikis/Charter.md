@@ -1,6 +1,6 @@
 <!-- berrywiki
-id: 6d617269-6400-7000-8000-000000000002
-parent: 6d617269-6400-7000-8000-000000000001
+id: 01a115aa-ca19-80fe-a176-cc62d137350a
+parent: 01a115aa-ca16-8134-837f-254d19a045bf
 position: 10
 kind: page
 tags:
@@ -89,7 +89,7 @@ Three places where the estate overrules or sharpens the charter text. Each is a 
 
 ## Known stale statements in the sources
 
-- `docs/MARID-FRAMEWORK.adoc` and `PROJECT_BRIEF.md` name the Arango client package `ArangoDB.jl`. It was renamed to **MaridArango** on 2026-09-22 (D57, marid PR #41); the UUID `719c9fe8-…` was kept. Read `ArangoDB.jl` in the charter as `packages/MaridArango`.
+- `docs/MARID-FRAMEWORK.adoc` and `PROJECT_BRIEF.md` name the Arango client package `ArangoDB.jl`. It was renamed to **MaridArango** on 2026-09-22 (D57, marid PR #41); the UUID was kept across the rename. On 2026-10-07 every package UUID was re-minted as an ADR-008 profile-T UUIDv8 (D320/D322); MaridArango's is now `01a115ae-…`. Read `ArangoDB.jl` in the charter as `packages/MaridArango`.
 - Principle 10 says documentation is "built in CI with Documenter.jl". No Documenter build exists yet; `docs/FRAMEWORK-ALIGNMENT.adoc` lists it as a gap.
 - The charter's frontend story still names `openapi-typescript` and Apollo/urql/Relay codegen as examples. Adaptation 1 above supersedes them.
 

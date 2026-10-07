@@ -1,10 +1,10 @@
 name = "MaridOpenAPI"
-uuid = "d46b8009-b507-5415-bdf2-d181fb662532"
+uuid = "01a115b6-76ac-8538-8576-41738982d5d4"
 authors = ["Jonathan D.A. Jewell <6759885+hyperpolymath@users.noreply.github.com>"]
 version = "0.1.0"
 
 [deps]
-MaridIR = "0aa8228c-ae90-54ec-b99f-6e73e9362e55"
+MaridIR = "01a115b4-723a-8911-b469-7c18b764c41a"
 
 [compat]
 MaridIR = "0.1"

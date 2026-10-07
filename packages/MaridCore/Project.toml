@@ -1,11 +1,11 @@
 name = "MaridCore"
-uuid = "e7156291-0549-58db-b616-467193d4b712"
+uuid = "01a115b2-6dc9-85a9-ada1-2bf5d8075f56"
 authors = ["Jonathan D.A. Jewell <6759885+hyperpolymath@users.noreply.github.com>"]
 version = "0.1.0"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
-MaridIR = "0aa8228c-ae90-54ec-b99f-6e73e9362e55"
+MaridIR = "01a115b4-723a-8911-b469-7c18b764c41a"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
@@ -23,8 +23,8 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 test = ["Test"]
 
 [weakdeps]
-MaridCodec = "eca7d35b-6611-5bf5-a92e-bc308a796804"
-MaridTransport = "9b56d6cb-8332-56b5-a8cb-605b4eec7468"
+MaridCodec = "01a115b0-6977-8194-b1bb-ba277a2ddf75"
+MaridTransport = "01a115ba-7f33-8545-9989-732142b76ec2"
 
 [extensions]
 MaridHTTPJSONExt = ["MaridCodec", "MaridTransport"]
