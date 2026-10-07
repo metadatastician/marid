@@ -2,20 +2,20 @@
 # Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 name = "RelationshipExplorer"
-uuid = "c8246d98-f6e0-4de5-9406-028dc2860e78"
+uuid = "01a115bb-816e-8ea1-b622-68991420e784"
 authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
 version = "0.3.0"
 
 [deps]
-MaridArango = "719c9fe8-89eb-588d-a237-0159f38ee2e4"
-MaridCodec = "eca7d35b-6611-5bf5-a92e-bc308a796804"
-MaridCore = "e7156291-0549-58db-b616-467193d4b712"
-MaridGraphQL = "dc948de1-81b6-5b14-aa1c-15a8f36634c8"
-MaridIR = "0aa8228c-ae90-54ec-b99f-6e73e9362e55"
-MaridOpenAPI = "d46b8009-b507-5415-bdf2-d181fb662532"
-MaridRPC = "6103e3ce-053f-5ec4-9c2b-ebfa0cc52cf7"
-MaridStorage = "2f1b9ad7-f130-5c00-9245-1df50bc1442b"
-MaridTransport = "9b56d6cb-8332-56b5-a8cb-605b4eec7468"
+MaridArango = "01a115ae-6523-8273-8497-753822252d6a"
+MaridCodec = "01a115b0-6977-8194-b1bb-ba277a2ddf75"
+MaridCore = "01a115b2-6dc9-85a9-ada1-2bf5d8075f56"
+MaridGraphQL = "01a115b3-6ffe-872f-8f60-7fcfc2fd40cf"
+MaridIR = "01a115b4-723a-8911-b469-7c18b764c41a"
+MaridOpenAPI = "01a115b6-76ac-8538-8576-41738982d5d4"
+MaridRPC = "01a115b7-7898-8fd3-b41a-e71f42d03386"
+MaridStorage = "01a115b9-7cf4-8463-9dfb-224e0c6ab613"
+MaridTransport = "01a115ba-7f33-8545-9989-732142b76ec2"
 
 [compat]
 MaridArango = "0.1"

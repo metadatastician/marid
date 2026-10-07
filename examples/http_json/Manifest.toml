@@ -2,7 +2,7 @@
 
 julia_version = "1.10.10"
 manifest_format = "2.0"
-project_hash = "a4d31185bbc7e624ff015c82df9f065923e15083"
+project_hash = "2f4b860fcc1b5e9ba0bbcb72d265f00d63566f2f"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -80,13 +80,13 @@ version = "1.2.0"
 [[deps.MaridCodec]]
 deps = ["JSON3"]
 path = "../../packages/MaridCodec"
-uuid = "eca7d35b-6611-5bf5-a92e-bc308a796804"
+uuid = "01a115b0-6977-8194-b1bb-ba277a2ddf75"
 version = "0.1.0"
 
 [[deps.MaridCore]]
 deps = ["Dates", "MaridIR", "UUIDs"]
 path = "../../packages/MaridCore"
-uuid = "e7156291-0549-58db-b616-467193d4b712"
+uuid = "01a115b2-6dc9-85a9-ada1-2bf5d8075f56"
 version = "0.1.0"
 weakdeps = ["MaridCodec", "MaridTransport"]
 
@@ -95,13 +95,13 @@ weakdeps = ["MaridCodec", "MaridTransport"]
 
 [[deps.MaridIR]]
 path = "../../packages/MaridIR"
-uuid = "0aa8228c-ae90-54ec-b99f-6e73e9362e55"
+uuid = "01a115b4-723a-8911-b469-7c18b764c41a"
 version = "0.1.0"
 
 [[deps.MaridTransport]]
 deps = ["HTTP", "Sockets"]
 path = "../../packages/MaridTransport"
-uuid = "9b56d6cb-8332-56b5-a8cb-605b4eec7468"
+uuid = "01a115ba-7f33-8545-9989-732142b76ec2"
 version = "0.1.0"
 
 [[deps.Markdown]]

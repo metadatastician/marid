@@ -1,11 +1,11 @@
 name = "MaridRPC"
-uuid = "6103e3ce-053f-5ec4-9c2b-ebfa0cc52cf7"
+uuid = "01a115b7-7898-8fd3-b41a-e71f42d03386"
 authors = ["Jonathan D.A. Jewell <6759885+hyperpolymath@users.noreply.github.com>"]
 version = "0.1.0"
 
 [deps]
-MaridCodec = "eca7d35b-6611-5bf5-a92e-bc308a796804"
-MaridIR = "0aa8228c-ae90-54ec-b99f-6e73e9362e55"
+MaridCodec = "01a115b0-6977-8194-b1bb-ba277a2ddf75"
+MaridIR = "01a115b4-723a-8911-b469-7c18b764c41a"
 
 [compat]
 MaridCodec = "0.1"

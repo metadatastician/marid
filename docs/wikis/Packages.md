@@ -1,6 +1,6 @@
 <!-- berrywiki
-id: 6d617269-6400-7000-8000-000000000004
-parent: 6d617269-6400-7000-8000-000000000001
+id: 01a115aa-ca20-839a-9249-dc444367c78d
+parent: 01a115aa-ca16-8134-837f-254d19a045bf
 position: 30
 kind: page
 tags:
@@ -41,7 +41,7 @@ Per AGENTS.md §6 the words below are distinct and none implies the next: **impl
 
 | Package | Purpose | Notes |
 |---|---|---|
-| **MaridArango** | Native Julia HTTP client for ArangoDB: auth, pooling, cursors, AQL, transactions, retries, changefeeds. Stdlib-only deps. | Renamed from `ArangoDB` on 2026-09-22 (D57); UUID `719c9fe8-89eb-588d-a237-0159f38ee2e4` kept. The recon found the client's HTTP path mocked; real-container tests are work package E. |
+| **MaridArango** | Native Julia HTTP client for ArangoDB: auth, pooling, cursors, AQL, transactions, retries, changefeeds. Stdlib-only deps. | Renamed from `ArangoDB` on 2026-09-22 (D57); UUID `01a115ae-6523-8273-8497-753822252d6a` kept. The recon found the client's HTTP path mocked; real-container tests are work package E. |
 | **MaridStorage** | Storage seam; in-memory, SQLite and DuckDB implementations; Arango via package extension. | Silent fallback to memory when the database is unavailable is a recorded defect to remove. |
 
 ## Later (Phases 4–7)

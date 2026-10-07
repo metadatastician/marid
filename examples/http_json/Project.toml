@@ -1,8 +1,8 @@
 [deps]
-MaridCore = "e7156291-0549-58db-b616-467193d4b712"
-MaridIR = "0aa8228c-ae90-54ec-b99f-6e73e9362e55"
-MaridCodec = "eca7d35b-6611-5bf5-a92e-bc308a796804"
-MaridTransport = "9b56d6cb-8332-56b5-a8cb-605b4eec7468"
+MaridCore = "01a115b2-6dc9-85a9-ada1-2bf5d8075f56"
+MaridIR = "01a115b4-723a-8911-b469-7c18b764c41a"
+MaridCodec = "01a115b0-6977-8194-b1bb-ba277a2ddf75"
+MaridTransport = "01a115ba-7f33-8545-9989-732142b76ec2"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"

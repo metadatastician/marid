@@ -1,6 +1,6 @@
 <!-- berrywiki
-id: 6d617269-6400-7000-8000-000000000008
-parent: 6d617269-6400-7000-8000-000000000001
+id: 01a115aa-ca2e-8ec0-ab0d-4e07ddbe2023
+parent: 01a115aa-ca16-8134-837f-254d19a045bf
 position: 70
 kind: page
 tags:
@@ -129,7 +129,7 @@ Owner-level decisions about the Marid program (sequencing, scope, what is and is
 Recorded rather than silently corrected, because the ADR files are immutable once accepted:
 
 - `docs/adr/README.adoc` ends with "Status: Gate 0 not yet started; no Marid ADRs exist yet." This is stale: seven ADRs exist in the same directory, six accepted on 2026-09-19 and one implemented locally for review on the same date. The README's conventions section is still correct.
-- `docs/adr/0004-arangodb-native-http-client.adoc` names the package `ArangoDB.jl` at `packages/ArangoDB/`. The directory is now `packages/MaridArango/` and the package is named `MaridArango` (`Project.toml` name `MaridArango`, UUID `719c9fe8-89eb-588d-a237-0159f38ee2e4`, unchanged by the rename). The feasibility audit's "Available (unregistered)" check for the name `ArangoDB` predates the rename.
+- `docs/adr/0004-arangodb-native-http-client.adoc` names the package `ArangoDB.jl` at `packages/ArangoDB/`. The directory is now `packages/MaridArango/` and the package is named `MaridArango` (`Project.toml` name `MaridArango`, UUID `01a115ae-6523-8273-8497-753822252d6a`, unchanged by the rename). The feasibility audit's "Available (unregistered)" check for the name `ArangoDB` predates the rename.
 - `docs/adr/0005-affinescript-browser-client.adoc` cites estate policy as `ANCHOR.a2ml` (twice). Zero `.a2ml` files exist in the repository; that format was replaced by `.deed`. The ruling of 2026-08-25 that the ADR relies on is unaffected; only the file citation is stale.
 - `docs/adr/0007-native-capability-spec.adoc` and its update refer to the gateway as `hyperpolymath/http-capability-gateway`; that reference is to a different repository and is not a Marid URL. Any `github.com/hyperpolymath/marid` URL encountered elsewhere in the docs tree is stale: the repository is `github.com/metadatastician/marid`.
 - The ADRs pre-date the thirteen-package inventory and name `@marid/client`, `@marid/react`, `@marid/vue` and `@marid/elements` for the browser packages; see [[Web-SDKs]] for the current names.

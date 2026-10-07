@@ -1,5 +1,5 @@
 name = "MaridCRDT"
-uuid = "587440ec-2162-5de7-b1b0-3fcc6b6917d3"
+uuid = "01a115af-6777-83e7-bbf4-4312fe84fb45"
 authors = ["Jonathan D.A. Jewell <6759885+hyperpolymath@users.noreply.github.com>"]
 version = "0.1.0"
 
