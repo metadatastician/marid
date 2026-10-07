@@ -39,6 +39,8 @@ erl_crash.dump
 *.jl.cov
 *.jl.mem
 /Manifest.toml
+# Libraries never commit a manifest; only applications under examples/ do.
+/packages/*/Manifest.toml
 
 # 
 /lib/bs/
