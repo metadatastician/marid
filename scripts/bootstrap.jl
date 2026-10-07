@@ -32,6 +32,9 @@ cd(environment) do
     # `expected package `Parsers [69de0a69]` to be registered` - a red matrix
     # cell for every package that tracks a manifest, for no reason. Resolve is
     # kept as the fallback, which is what a missing or stale manifest needs.
+    # Only applications (examples/*) commit a manifest; the libraries under
+    # packages/ never do (they are registered by subdir, D67/D117), so a
+    # package environment always takes the resolve path.
     try
         Pkg.instantiate()
     catch err

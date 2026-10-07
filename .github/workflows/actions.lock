@@ -74,7 +74,6 @@ workflows:
     '.github/workflows/release.yml':
         - 'actions/attest-build-provenance@v4.2.2'
         - 'actions/checkout@v7.0.1'
-        - 'actions/upload-artifact@v7.0.1'
         - 'softprops/action-gh-release@v3.0.3'
     '.github/workflows/rsr-compliance-canary.yml':
         - 'actions/checkout@v7.0.1'

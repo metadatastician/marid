@@ -2,158 +2,116 @@
 # SPDX-License-Identifier: MPL-2.0
 # Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 #
-# Release workflow — triggered by version tags (v*).
-# Builds artifacts, generates changelog via git-cliff, creates a GitHub Release,
-# and produces GitHub native build-provenance attestations (OIDC + Sigstore).
+# Release workflow for the Julia packages under packages/ (D69-A, D117).
+# Triggered by per-package tags `<Package>-v<version>`, the form TagBot uses for
+# subdirectory packages (e.g. MaridCodec-v0.1.0). One tag releases one package.
+#
+# Ships two files and attests both (D59: tarball digest AND git tree hash):
+#   <Pkg>-<ver>.tar.gz  `git archive` of the package subdir tree
+#   <Pkg>-<ver>.tree    package, version, subdir, git-tree-sha1, commit -- the
+#                       tree hash is what a Julia registry records and verifies
+# Verify with `gh attest verify <file> --repo <owner>/<repo>`.
 name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'Marid*-v[0-9]*'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 permissions:
   contents: read
 jobs:
-  build:
-    name: Build Artifacts
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - name: Detect project type and build
-        id: build
-        run: |
-          # Auto-detect build system from project files.
-          # Order matters: more specific markers checked first.
-          if [ -f "mix.exs" ]; then
-            echo "::notice::Detected Elixir/Gleam project (mix.exs)"
-            echo "build_type=mix" >> "$GITHUB_OUTPUT"
-            mix local.hex --force --if-missing
-            mix local.rebar --force --if-missing
-            mix deps.get --only prod
-            MIX_ENV=prod mix release
-          elif [ -f "Cargo.toml" ]; then
-            echo "::notice::Detected Rust project (Cargo.toml)"
-            echo "build_type=cargo" >> "$GITHUB_OUTPUT"
-            cargo build --release
-          elif [ -f "build.zig" ]; then
-            echo "::notice::Detected Zig project (build.zig)"
-            echo "build_type=zig" >> "$GITHUB_OUTPUT"
-            zig build -Doptimize=ReleaseSafe
-          elif [ -f "deno.json" ] || [ -f "deno.jsonc" ]; then
-            echo "::notice::Detected Deno project (deno.json)"
-            echo "build_type=deno" >> "$GITHUB_OUTPUT"
-            deno task build
-          elif [ -f "gossamer.conf.json" ]; then
-            echo "::notice::Detected Gossamer project (gossamer.conf.json)"
-            echo "build_type=gossamer" >> "$GITHUB_OUTPUT"
-            gossamer build
-          elif [ -f "gleam.toml" ]; then
-            echo "::notice::Detected Gleam project (gleam.toml)"
-            echo "build_type=gleam" >> "$GITHUB_OUTPUT"
-            gleam build
-          elif [ -f "rebar.config" ]; then
-            echo "::notice::Detected Erlang/Rebar project (rebar.config)"
-            echo "build_type=rebar" >> "$GITHUB_OUTPUT"
-            rebar3 as prod release
-          elif [ -f "Justfile" ] || [ -f "justfile" ]; then
-            echo "::notice::Detected Justfile — running 'just build'"
-            echo "build_type=just" >> "$GITHUB_OUTPUT"
-            just build
-          else
-            echo "::error::No recognised build system found."
-            echo "Expected one of: mix.exs, Cargo.toml, build.zig, deno.json, gossamer.conf.json, gleam.toml, rebar.config, Justfile"
-            exit 1
-          fi
-        # TODO: Upload build artifacts if needed (pin actions/upload-artifact
-        #   to a full commit SHA when enabling, per the SHA-pin policy):
-        # - uses: actions/upload-artifact@<full-commit-sha>  # vX.Y.Z
-        #   with:
-        #     name: release-artifacts
-        #     path: target/release/
-  changelog:
-    name: Generate Changelog
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    outputs:
-      changelog: ${{ steps.cliff.outputs.content }}
-      version: ${{ steps.version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-      - name: Install git-cliff
-        run: |
-          curl -sSfL https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-$(uname -m)-unknown-linux-gnu.tar.gz \
-            | tar -xz --strip-components=1 -C /usr/local/bin/ git-cliff-*/git-cliff
-      - name: Generate changelog for this release
-        id: cliff
-        run: |
-          # Generate changelog for the current tag only
-          CHANGELOG=$(git cliff --latest --strip header)
-          # Write to output using delimiter to handle multiline
-          {
-            echo "content<<CLIFF_EOF"
-            echo "$CHANGELOG"
-            echo "CLIFF_EOF"
-          } >> "$GITHUB_OUTPUT"
-      - name: Update full CHANGELOG.md
-        run: |
-          git cliff --output CHANGELOG.md
-      - name: Upload updated CHANGELOG.md
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: changelog
-          path: CHANGELOG.md
-          retention-days: 5
   release:
-    name: Create GitHub Release
-    needs: [build, changelog]
+    name: Release Julia package
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write
+      contents: write       # create the GitHub Release
       id-token: write       # mint the OIDC token attestation provenance is signed with
       attestations: write   # write the build-provenance attestation (the "claim")
     steps:
       - uses: actions/checkout@v7.0.1
-      # TODO: Download build artifacts if uploading to the release (pin
-      #   actions/download-artifact to a full commit SHA when enabling):
-      # - uses: actions/download-artifact@<full-commit-sha>  # vX.Y.Z
-      #   with:
-      #     name: release-artifacts
-      #     path: artifacts/
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3.0.3
         with:
-          body: ${{ needs.changelog.outputs.changelog }}
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
-          generate_release_notes: false
-          # TODO: Add artifact files to the release
-          # files: |
-          #   artifacts/*
+          fetch-depth: 0
+      - name: Resolve package and version from the tag
+        id: meta
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          pkg="${tag%-v*}"
+          ver="${tag##*-v}"
+          dir="packages/$pkg"
+          if [ ! -f "$dir/Project.toml" ]; then
+            echo "::error::tag $tag names no package: $dir/Project.toml does not exist"
+            exit 1
+          fi
+          declared="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$dir/Project.toml")"
+          if [ "$declared" != "$ver" ]; then
+            echo "::error::tag $tag says $ver but $dir/Project.toml declares '$declared'"
+            exit 1
+          fi
+          if [ ! -f "$dir/LICENSE" ]; then
+            echo "::error::$dir/LICENSE missing; registries check the package subdir, not the repo root"
+            exit 1
+          fi
+          commit="$(git rev-parse "$tag^{commit}")"
+          tree="$(git rev-parse "$commit:$dir")"
+          case "$ver" in *-*) pre=true ;; *) pre=false ;; esac
+          {
+            echo "pkg=$pkg"
+            echo "ver=$ver"
+            echo "dir=$dir"
+            echo "commit=$commit"
+            echo "tree=$tree"
+            echo "prerelease=$pre"
+          } >> "$GITHUB_OUTPUT"
+      - name: Build release files and notes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # GitHub native artifact attestation (build provenance). Generates a
-      # signed, verifiable claim binding each released artifact to this build
-      # (commit, workflow, runner) via OIDC + Sigstore — verify with
-      # `gh attest verify <artifact> --repo ${{ github.repository }}`.
-      # Replaces the older SLSA-generator job; native attestations need no
-      # separate isolated workflow.
-      # TODO: point subject-path at the artifacts this release actually ships
-      #   (must match the `files:` uploaded above, e.g. artifacts/*).
+          PKG: ${{ steps.meta.outputs.pkg }}
+          VER: ${{ steps.meta.outputs.ver }}
+          DIR: ${{ steps.meta.outputs.dir }}
+          COMMIT: ${{ steps.meta.outputs.commit }}
+          TREE: ${{ steps.meta.outputs.tree }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          # Given a bare tree id, git archive stamps every entry with the current
+          # time, so the digest would change on each run. Pin it to the commit
+          # time: the tarball is then rebuildable from the tag with the same git.
+          git archive --format=tar.gz --prefix="$PKG/" \
+            --mtime="$(git log -1 --format=%cI "$COMMIT")" \
+            -o "artifacts/$PKG-$VER.tar.gz" "$TREE"
+          printf 'package=%s\nversion=%s\nsubdir=%s\ngit-tree-sha1=%s\ncommit=%s\n' \
+            "$PKG" "$VER" "$DIR" "$TREE" "$COMMIT" > "artifacts/$PKG-$VER.tree"
+          # No earlier <Pkg>-v* tag on a package's first release: describe fails and
+          # the notes fall back to the whole history of the subdir.
+          prev="$(git describe --tags --abbrev=0 --match "$PKG-v*" "$COMMIT^" 2>/dev/null || true)"
+          {
+            echo "## $PKG v$VER"
+            echo
+            echo "Subdirectory \`$DIR\`, git tree \`$TREE\`, commit \`$COMMIT\`."
+            echo
+            echo "### Changes${prev:+ since $prev}"
+            echo
+            git log --no-merges --format='- %s (%h)' ${prev:+"$prev.."}"$COMMIT" -- "$DIR"
+          } > release-notes.md
+          sha256sum artifacts/*
+      # Attest before publishing, so a failed attestation never leaves a
+      # published release without provenance.
       - name: Attest build provenance
-        if: ${{ hashFiles('artifacts/*') != '' }}   # skip until real artifacts are wired
         uses: actions/attest-build-provenance@v4.2.2
         with:
           subject-path: 'artifacts/*'
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3.0.3
+        with:
+          name: ${{ steps.meta.outputs.pkg }} v${{ steps.meta.outputs.ver }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          generate_release_notes: false
+          files: |
+            artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
