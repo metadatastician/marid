@@ -1,312 +1,326 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
-// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-= AFFIRMATION — Marid, as of 2026-09-19
-:toc: macro
-:toclevels: 2
-:std-docs: https://github.com/hyperpolymath/standards/blob/main/docs
+= AFFIRMATION — Marid, as of 2026-10-07
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:status: DRAFT — agent-authored, NOT affirmed by the owner
+:toc: preamble
+:toc-title: Contents
+:icons: font
+:doctype: article
 
-_the No-Bullshit file: what we affirm was true and checkable at this moment._
-
-[NOTE]
+[WARNING]
 ====
-An *affirmation* is a solemn declaration of the truth of a statement, made by
-someone who _declines to swear an oath_ — our truth-as-best-believed at a
-stamped instant, binding on our honesty, not a claim of infallibility. It is the
-third of the README / EXPLAINME / AFFIRMATION trio:
-
-[cols="1,3,2",options="header"]
-|===
-| File | Answers | Tense
-| `README.adoc` | _Where is this going, and why?_ — steering, intent, vision | future / aspirational
-| `EXPLAINME.adoc` | _How is it built, and what's the evidence?_ — engineering | descriptive / mechanism
-| *`AFFIRMATION.adoc`* (this file) | _What can we honestly affirm was *true and checkable* at a stamped moment?_ | a frozen instant, falsifiable
-|===
-
-This file is *optional*. Delete it rather than carry an affirmation you have not
-re-verified — a stale affirmation is worse than none.
+*DRAFT.* This file is a draft until the owner lands it with a signed commit
+(`git commit -S`) whose parent is the anchor SHA below. Until then, read every
+claim in it as unaffirmed.
 ====
-
-toc::[]
 
 == What this is, and how it works
 
-*What it is.* A short, dated, signed snapshot of what hyperpolymath can honestly and
-verifiably claim about *Marid* at one exact commit. Nothing here is
-marketing and nothing is a promise about the future — those live in the README.
-This file is the receipt.
+Marid is a Julia-first framework for web applications, APIs and reactive
+dashboards. It is a monorepo of 13 Julia packages under `packages/`, a runnable
+HTTP/JSON example under `examples/http_json/`, and Bun-tested web clients under
+`web/`. This file reports what the repo's own checks printed when run against
+one commit on 2026-10-07. It supersedes the 2026-09-19 affirmation, now at
+`docs/affirmations/AFFIRMATION-2026-09-19.adoc`.
 
-*What the project is.* Julia-first framework for web applications, APIs, and reactive scientific dashboards, with interoperable protocols and frontend independence.
+== The epistemic contract
 
-*How it stays trustworthy.* Three moving parts:
+You may conclude that each command below, run at the anchor commit with the
+listed toolchain, produced the exit code and counts stated. You may not
+conclude anything about other commits, other Julia versions, CI, the Pages
+site, or behaviour under load. No CI badge or CI run is cited as evidence here.
+Silence is not a claim: anything not listed was not checked.
 
-. *Ground truth, not memory.* Every claim below must be produced by _running the
-  project's own checks_ in the session that writes this file (build, tests,
-  typecheck, `just audit`). Where a status doc, the `Justfile`, or memory says
-  otherwise, the live run wins and the contradiction is flagged here.
-. *A frozen anchor.* The file names the exact commit SHA, branch, UTC timestamp,
-  working-tree delta and toolchain (see <<verifiable-anchor>>), so "true" always
-  means "true _at this point_". Move the SHA and this file is a draft until it
-  is re-run.
-. *A real signature.* It is landed by a *signed git commit*; that signature over
-  this content at the anchored SHA is what makes the affirmation tamper-evident
-  and attributable — not the prose alone.
-
-*We are fallible.* This is our best honest belief, not a proof of its own
-correctness. Treat it as a falsifiable claim, not gospel.
-
-== The epistemic contract (read this before you trust _or_ attack)
-
-This document records hyperpolymath's *best belief* at the timestamp below. It is
-*not a guarantee of correctness.* The only guarantee is *no intentional
-overclaim*: where something is proven we say "proven"; where it is a documented
-trust boundary, an experiment, or an unwired module, we say so; where a claim is
-the README's aspiration rather than a checked result, we say so. An honest claim
-that later turns out false is an *error to be fixed* — not a lie.
-
-What you may conclude from this file:
-
-* Every claim below was produced by *running the tool* in the session that wrote
-  this file — not from memory, not copied forward from a previous affirmation,
-  and not read off a status document.
-* Where a live run and a status document disagreed, the live run won and the
-  status document is named as stale in <<outstanding>>.
-
-What you may *not* conclude:
-
-* That anything is true *now*. This file describes the commit in
-  <<verifiable-anchor>> and nothing else.
-* That unlisted things pass. *Silence is not a claim.*
-
-*Standing invitation to refute.* You are invited to bulldoze any claim in this
-file. Bring a counter-example, a failing run, or a contradicting source.
-
-[#verifiable-anchor]
 == Verifiable anchor
 
-[cols="1,3",options="header"]
+[cols="1,3", options="header"]
 |===
 | Field | Value
 
-| Project
-| Marid
-
 | Repo
-| `hyperpolymath/marid`
+| `metadatastician/marid`
 
 | Branch
-| `main`
+| `main` (measured at `origin/main`, checked out as local branch
+  `docs/affirmation-2026-10-07`)
 
 | Commit (HEAD)
-| `74ea9a661663015bd90fabb61a71162fbe1f4813`
+| `fd139f763a306a7e2eca60d96ea1a1a9f77c1e71`
 
 | Permalink
-| https://github.com/hyperpolymath/marid/tree/74ea9a661663015bd90fabb61a71162fbe1f4813
+| https://github.com/metadatastician/marid/tree/fd139f763a306a7e2eca60d96ea1a1a9f77c1e71
 
 | Verified (UTC)
-| `2026-09-19T01:54:08Z`
+| 2026-10-07T11:07:09Z to 2026-10-07T11:20:25Z
 
 | Working-tree delta at verification
-| `clean`
+| `clean`: `git status --porcelain` printed 0 lines before and after the runs.
+  Gitignored products of the runs were present (`packages/*/Manifest.toml`,
+  `web/node_modules/`); they do not affect the results.
 
 | Toolchain
-| `just 1.40.0`, `git 2.47.3`, `nickel 1.17.0`, `asciidoctor 2.0.26`,
-  `bash 5.2.37`, `python 3.13.14`, `curl 8.14.1` (GitHub REST evidence),
-  GitHub-hosted `ubuntu-latest` (CI).
-
-| Affirmed by
-| Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+| Julia 1.10.10 (the `mise.toml` pin); Bun 1.4.2 (the `mise.toml` pin);
+  just 1.56.0; Asciidoctor 2.0.26; git 2.47.3; bash 5.2
 |===
 
-[IMPORTANT]
+[CAUTION]
 ====
-*Never anchor to a tag.* Tags move, and a moved tag silently invalidates every
-claim in this file.
-
 If you are reading this at a later commit, the claims may have drifted. Re-run
-<<reproduce>> and write a fresh affirmation; do not trust a stale one.
+the reproduction steps and write a fresh affirmation; do not trust a stale one.
 ====
 
 == Companion documents and repo metadata (cross-check)
 
-The files a sceptic should read against this one — *including any that
-contradict it*. A contradiction named here is honest; one the reader finds for
-themselves is not.
+[cols="1,3", options="header"]
+|===
+| Document | Relationship to this file
 
-* `README.adoc` — the aspirational claims this file is measured against.
-* `docs/EXPLAINME.adoc` — the mechanism.
-* `docs/AUDIT.adoc` — the standing conformance audit.
-* `0-AI-MANIFEST.deed` — machine-readable repo metadata.
-* Central Estate CI/CD Audit, run `35413738206` — *contradicts* the canon
-  reading: its Required Files Gate fails while the canon profile gates pass.
-  The live run wins as fact (it fails); the canon profile gates win as
-  authority; the contradiction is open and the owner's ruling is pending
-  (see <<outstanding>>).
+| `README.adoc`, `docs/EXPLAINME.adoc`
+| Aspiration and mechanism. Not checked here.
+
+| `docs/affirmations/AFFIRMATION-2026-09-19.adoc`
+| The previous affirmation. Several of its claims are refuted below. It was
+  never anchored: see *Outstanding / weak / refuted*.
+
+| 18 files carrying `Status: Gate 0 skeleton`
+| *Partly stale.* Five of them are the READMEs of `MaridCodec`,
+  `MaridGraphQL`, `MaridOpenAPI`, `MaridRPC` and `MaridStorage`, each of which
+  now has a `src/` tree and a passing test suite (counts below).
+
+| `.github/workflows/julia-ci.yml`
+| The source of the per-package commands below. Its matrix tests Julia 1.10
+  and 1.11; only 1.10.10 was run here.
+|===
 
 == The honest state (one breath)
 
-Marid is a Gate 0 monorepo baseline — thirteen charter package stubs, an
-AffineScript-under-Bun web story, an IR-first contract registry, and a
-machine-readable surface whose six descriptiles also ship as an
-ABNF-validated repo-deed — whose local gates and CI pass except two
-pre-existing estate-level reds, with a Pages build still pending when this
-was written.
+All 13 Julia packages bootstrap and pass their test suites on Julia 1.10.10
+(385 assertions in all), the compat and precompile checks pass, the
+capability-spec emitter reproduces its golden file, the web clients pass
+`bun test`, and the template's shape gates pass. The HTTP/JSON example failed
+once on a cold start and passed on re-run.
 
 === What is solid (and how we checked)
 
-[cols="2,1,3",options="header"]
+Per-package rows ran
+`julia --startup-file=no scripts/bootstrap.jl packages/<P>` (exit 0 for all
+13), then
+`julia --startup-file=no --project=packages/<P> packages/<P>/test/runtests.jl`.
+
+[cols="3,1,3", options="header"]
 |===
-| Claim | Status | Evidence (command, and what it printed)
-| Full local validation passes at the anchor | affirmed | `just validate` —
-  `All validations passed!`
-| Repo map is deterministic and current | affirmed |
-  `bash tests/shape/repo_map_determinism_test.sh` — `PASS: repository map is
-  byte-identical across locales, and committed copy is current`
-| Every tracked AsciiDoc renders | affirmed |
-  `bash scripts/check-adoc-renders.sh .` — `PASS: all 188 tracked .adoc
-  file(s) render clean`
-| Licence texts and per-file SPDX headers are present | affirmed |
-  `ls LICENSES/` shows `CC-BY-SA-4.0.txt` + `MPL-2.0.txt`; 94 `.adoc`
-  files carry `SPDX-License-Identifier`
-| CI at the anchor is green except the two named estate reds | affirmed |
-  GitHub REST, 25 runs: 24 completed, all green except audit run
-  `35413738206` and CodeQL run `35413738709` (see <<outstanding>>);
-  DEED validation run `35413737642` green with the deed landed; Pages
-  run `35413737644` pending, outcome unaffirmed
-| Repo-deed is ABNF-valid | affirmed |
-  `python3 deed_lint.py marid_chora.deed` (pristine standards copy) —
-  `OK marid_chora.deed`
-| README aspirations beyond Gate 0 | aspiration | `README.adoc` — *not
-  checked*, do not read as affirmed
+| Command | Exit | Result
+
+| `MaridIR` tests
+| 0
+| 21/21 (Golden Suite) and 58/58 (Native capability spec)
+
+| `MaridCodec` tests
+| 0
+| 4/4 and 12/12 (Native JSON and quality negotiation)
+
+| `MaridOpenAPI` tests
+| 0
+| 4/4
+
+| `MaridRPC` tests
+| 0
+| 5/5
+
+| `MaridGraphQL` tests
+| 0
+| 6/6
+
+| `MaridTransport` tests
+| 0
+| 29/29
+
+| `MaridCore` tests
+| 0
+| 32/32
+
+| `MaridArango` tests
+| 0
+| 22/22
+
+| `MaridStorage` tests
+| 0
+| 9/9
+
+| `MaridControl` tests
+| 0
+| 118/118
+
+| `MaridLive` tests
+| 0
+| 25/25
+
+| `MaridCRDT` tests
+| 0
+| 18/18
+
+| `MaridRaft` tests
+| 0
+| 22/22
+
+| `julia --startup-file=no scripts/check-julia-compat.jl`
+| 0
+| "checked 13 package(s); 0 failing"
+
+| `julia --startup-file=no scripts/check-packages-precompile.jl`
+| 0
+| "checked 13 package(s); 0 failing. All packages precompile and load."
+
+| `./scripts/marid generate capability-spec
+  fixtures/capability/service.jl --deny-by-default --out <tmp>` then
+  `cmp <tmp> fixtures/capability/policy-strict.yaml`
+| 0, 0
+| Generated spec is byte-identical to the committed golden file
+
+| `bun install --frozen-lockfile && bun test` (`web/`)
+| 0, 0
+| 13 pass, 0 fail, 27 `expect()` calls, 4 files
+
+| `just validate`
+| 0
+| "RSR compliance: PASS", "AI install guide: PASS",
+  "All validations passed!"
+
+| `bash tests/shape/repo_map_determinism_test.sh`
+| 0
+| "PASS: repository map is byte-identical across locales, and committed copy
+  is current"
+
+| `bash scripts/check-adoc-renders.sh .`
+| 0
+| "PASS: all 210 tracked .adoc file(s) render clean"
+
+| `bash tests/aspect_tests.sh`
+| 0
+| PASS=3, FAIL=0, WARN=0
+
+| `ls LICENSES/`; `git ls-files '*.adoc'` against `grep -l
+  SPDX-License-Identifier`
+| -
+| `CC-BY-SA-4.0.txt` and `MPL-2.0.txt`; 208 of 210 tracked `.adoc` files carry
+  an SPDX line. The two without are `docs/ARCHITECTURE.adoc` and
+  `session/README.adoc`.
 |===
+
+The per-package total is 21+58+4+12+4+5+6+29+32+22+9+118+25+18+22 = 385
+assertions across 15 testsets.
 
 === The honest nuance you must not lose
 
-Where a true claim above is easily over-read. This section is what separates an
-affirmation from marketing.
-
-* "`just validate` green" covers template shape gates, not Marid behaviour:
-  at Gate 0 there are no Marid unit tests by design (brief §5 starts
-  executable gates at Gate 1). The estate suite passing means the skeleton
-  is well-formed, not that Marid works.
-* "CI green" means the 22 completed runs other than the two estate reds.
-  Estate Rules is green again after the root-allow dual-surface fix; DEED
-  validation passed with `marid_chora.deed` in place; the Pages outcome
-  postdates this file and is unaffirmed.
-* The anchor sits five commits above the last affirmation: the owner's
-  root-manifest rename (`f7215e3`), the reconciliation (`a3f5200`), the
-  root-allow dual-surface fix (`fbf4723`), a map regen (`6d2ca91`), and
-  the deed landing itself. This file covers the anchor tree only.
+* *One Julia version.* Only 1.10.10 was run. CI's matrix also names 1.11, and
+  the machine default here is 1.12.6. Nothing is claimed for either.
+* *`just test` was not the route.* `just test` runs `./scripts/marid check`,
+  which drives the package tests through an inline `python3 -c` script, and its
+  package list names `ArangoDB` where the directory is `MaridArango`. The
+  per-package commands above were run directly instead, as the CI workflow
+  runs them. The Python route was not exercised.
+* *`just validate` checks template shape*, not Marid behaviour.
+* *The e2e suite checks nothing.* `bash tests/e2e.sh` exited 0 with PASS=1,
+  but the one "pass" printed "Self-skipping: archetypes/ not found". A skip is
+  counted as a pass.
 
 === Known-incomplete but honestly fenced
 
-Gaps that fail *loudly* rather than silently. Name the guard that makes the
-failure loud — a gap with no guard belongs in <<outstanding>> instead.
+* The repo-deed `.machine_readable/descriptiles/marid_chora.deed` and
+  `0-AI-MANIFEST.deed` were not validated: the only validator available
+  locally is `deed_lint.py`, and Python is banned in this estate. Not run:
+  no non-Python deed validator available.
 
-* Unimplemented components (packages, web clients, contracts, fixtures,
-  reference app) — fenced by: 22 component READMEs carry a `Status: Gate 0
-  skeleton` line naming the implementing phase, and zero `Project.toml` /
-  zero `src/` dirs exist, so any Julia tooling fails closed ("not a
-  project") instead of half-working.
-
-[#outstanding]
 === Outstanding / weak / refuted (no spin)
 
-Known gaps, trust boundaries, postulates, unwired modules and stale docs.
-*Silence is not affirmation* — name what you have not verified, and name
-anything this session *refuted*.
+* *HTTP/JSON example is flaky on a cold start.* The first run of
+  `julia --project=examples/http_json examples/http_json/test/runtests.jl`
+  (after `scripts/bootstrap.jl examples/http_json`, exit 0) exited 1 with
+  23 pass, 6 fail, 1 error of 30. The first request returned
+  HTTP 408, not 200. The test server is started with `readtimeout=2`, so
+  first-request compilation probably exceeded it; that cause is inferred, not
+  shown. An
+  immediate re-run exited 0 with 30/30.
+* *The previous affirmation was never anchored.* Its anchor
+  `74ea9a661663015bd90fabb61a71162fbe1f4813` is not an ancestor of `main`
+  (`git merge-base --is-ancestor` fails): it is a squash orphan. The commit
+  that introduced that anchor, `b629e58`, has parent `37894d99`. Every commit
+  touching the file is unsigned (`git log --format=%G?` prints `N`). The
+  file was also edited after landing, by `fc619682`.
+* *Refuted from the 2026-09-19 file:*
+** "zero `Project.toml` / zero `src/` dirs exist": refuted. 15
+   `Project.toml` files are tracked and 19 `src/` directories exist.
+** "22 component READMEs carry a `Status: Gate 0 skeleton` line": refuted.
+   18 tracked files carry it, and 5 of those describe packages that now pass
+   tests.
+** "at Gate 0 there are no Marid unit tests": refuted by the 13 package
+   suites above.
+** "the `.a2ml` sources remain": refuted. `git ls-files '*.a2ml'` prints 0.
+** "188 tracked `.adoc` files render clean" and "94 `.adoc` files carry
+   SPDX": superseded by 210 and 208 at this anchor.
+** "Repo `hyperpolymath/marid`": the repo is `metadatastician/marid`.
+   `git grep -c hyperpolymath/marid` still finds 25 lines in 11 tracked files
+   (including the archived affirmation), against 141 lines in 67 files naming
+   `metadatastician/marid`.
+** The old file's CI-run claims (runs `35413738206`, `35413738709`,
+   `35413737642`, `35413737644`) are CI citations and were not re-checked.
+   The `deed_lint.py` claim was not re-run (Python).
+* *Toolchain declarations include banned tools.* `mise.toml` lists Python,
+  Go, Java, black and ruff, and `scripts/marid check` is Python.
+* *Deed placement.* The chora deed is at
+  `.machine_readable/descriptiles/marid_chora.deed`, not at the repo root.
+* `docs/legal/EXHIBIT-B-QUANTUM-SAFE.txt` is still present, as the old file
+  said. Its removal remains the owner's call.
 
-* Pages build still unproven: run `35413737644` was pending at writing;
-  the previous cold build (run `35410827911`) failed at the Setup Pages
-  step before the cabal build started, so the 60-minute fix (`b90d070`)
-  has not yet had a completed run. Check the deployment before citing
-  the site.
-* Estate audit red: run `35413738206` fails Required Files (demands root
-  `GOVERNANCE` / `ARCHITECTURE` / `MAINTAINERS`), contradicting the canon
-  profile gates (accept `docs/` + `.github/` forms) and `root-allow.txt`
-  (forbids root additions). Template `main` fails the same gate (run
-  `35366237363`, 2026-09-18). Left red for the owner's ruling; the
-  recommended fix is in the checker, not this repo.
-* CodeQL `startup_failure`, run `35413738709` — identical on the
-  template's last five runs (`34953137485`, `34952690152`,
-  `34952076985`, `34952060100`, `34952023994`): pre-existing estate
-  condition, not a Marid finding.
-* Unsigned landing: this file reads as *draft* until the owner
-  countersigns with `-S`; the anchor matches the landing commit's
-  parent, the signature is pending.
-* `docs/legal/EXHIBIT-B-QUANTUM-SAFE.txt` (template provenance
-  machinery) remains though the owner scrubbed Provenance claims from
-  `README.adoc`; removal is the owner's call.
-* Dual-surface deed: `marid_chora.deed` is translator-emitted and
-  ABNF-valid; the `.a2ml` sources remain until retire-the-checker day.
-  The `minted-from` / `registry` extension is owner-ruled (2026-09-19)
-  and filed on standards#837 for tableing. Still open: `STATE.a2ml`
-  (family-3 ruling), source-deletion timing, and the extension-only
-  `0-AI-MANIFEST.deed` content (no mapping spec exists for that family).
-* Refuted this session: (a) "the audit failure is a Marid defect" —
-  refuted by the template failing identically; (b) "the Pages
-  cancellations are flakiness" — refuted by the timeout log proof;
-  (c) "the `f9e173a` audit pin is resolvable" — refuted by
-  NOT-ANCESTOR (squash orphan; repinned to `222b1d9`); (d) "renaming
-  `.a2ml` to `.deed` migrates the format" — refuted by the grammar
-  ("a file using `=` is not a deed"); (e) "the campaign translator
-  handles any minted repo" — refuted by fail-closed on the
-  template-built seen-set (extended under owner ruling, filed upstream).
-
-[IMPORTANT]
-====
-Never delete a refuted claim. Deleting it is exactly the spin this genre exists
-to prevent — mark it refuted and say what refuted it.
-====
-
-[#reproduce]
 == Reproduce it yourself
 
 [source,bash]
 ----
-git clone https://github.com/hyperpolymath/marid
-cd marid
-git checkout 74ea9a661663015bd90fabb61a71162fbe1f4813
+git clone https://github.com/metadatastician/marid && cd marid
+git checkout fd139f763a306a7e2eca60d96ea1a1a9f77c1e71
+for p in MaridIR MaridCodec MaridOpenAPI MaridRPC MaridGraphQL \
+         MaridTransport MaridCore MaridArango MaridStorage MaridControl \
+         MaridLive MaridCRDT MaridRaft; do
+  julia --startup-file=no scripts/bootstrap.jl packages/$p
+  julia --startup-file=no --project=packages/$p packages/$p/test/runtests.jl
+done
+# expect: every suite passes; 385 assertions in all (Julia 1.10.10)
+julia --startup-file=no scripts/check-julia-compat.jl
+julia --startup-file=no scripts/check-packages-precompile.jl
+# expect: checked 13 package(s); 0 failing (both)
+julia --startup-file=no scripts/bootstrap.jl examples/http_json
+julia --startup-file=no --project=examples/http_json \
+  examples/http_json/test/runtests.jl
+# expect: 30/30, possibly only on a second, warm run
+(cd web && bun install --frozen-lockfile && bun test)
+# expect: 13 pass, 0 fail
 just validate
 # expect: All validations passed!
-bash tests/shape/repo_map_determinism_test.sh
-# expect: PASS: repository map is byte-identical across locales,
-#         and committed copy is current
 bash scripts/check-adoc-renders.sh .
-# expect: PASS: all 188 tracked .adoc file(s) render clean
+# expect: PASS: all 210 tracked .adoc file(s) render clean
 ----
 
 == One-line characterisation (quote this)
 
-> Marid's Gate 0 baseline is minted, green, and honestly fenced; the two reds belong to the estate, not the repo.
+At `fd139f76`, all 13 Marid Julia packages pass their own suites on Julia
+1.10.10 (385 assertions), the web clients pass `bun test` (13/13), and the
+shape gates are green; the HTTP/JSON example is flaky on a cold start, and the
+`just test` route depends on Python.
 
 == Joint attestation
 
-We, the undersigned, assert that *to the best of our joint belief at the
-timestamp above, every claim in this file is true and was checked as described*
-— with no intentional overclaim, and with the open gaps stated rather than
-hidden.
+Engineering party (AI)::
+  `claude-opus-5-5` (Anthropic), running in Claude Code. The checks were run
+  between 2026-10-07T11:07:09Z and 2026-10-07T11:20:25Z at the anchor commit.
+  The wording of this file is a faithful report of those runs and of nothing
+  else.
 
-* *Engineering party (AI):* Arena.ai Agent Mode — the exact backing-model
-  identifier is not disclosed to this session — ran the checks recorded
-  here at `2026-09-19T01:54:08Z` and stands behind the wording above as a
-  faithful report of those runs.
-* *Owner / maintainer:* Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk> — _signs by committing
-  this file with `-S`; the git commit signature over this content, at the
-  commit SHA recorded above, is the cryptographic form of this affirmation._
-
+Owner / maintainer::
+  Jonathan D.A. Jewell. The owner affirms by landing this file with a signed
+  commit whose parent is the anchor SHA:
++
 [source,bash]
 ----
-git commit -S -s docs/AFFIRMATION.adoc -m "docs: affirm state at 74ea9a661663015bd90fabb61a71162fbe1f4813"
+git commit -S -s -m "docs: affirm state at fd139f76"
 git log --show-signature -1
 ----
-
-[WARNING]
-====
-Do not use `--no-verify`. The pre-commit hook enforces the SPDX header, and an
-affirmation landed past its own repo's gates is self-refuting.
-====
-
-_Landed by a signed git commit. Verify with `git log --show-signature` that the
-anchor SHA above matches the parent of the commit that introduced this
-affirmation. If they do not match, this file is a *draft* and must be read as
-one._
