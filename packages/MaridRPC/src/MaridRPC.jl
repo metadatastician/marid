@@ -7,10 +7,15 @@
 JSON-RPC 2.0 bindings for Marid.
 
 Scope and limits, stated up front so they cannot be mistaken for protocol
-support: this is in-process request/response dispatch. It implements the single
-request form (success, method-not-found, invalid-request, internal-error) and
-NOTIFICATION bodies are not handled; batching is not implemented; there is no
-transport, no MCP lifecycle and no independent client interoperating with it.
+support. This is in-process request/response dispatch: one request at a time,
+against a registry of handlers.
+
+What it does: the single request form, with success, method-not-found,
+invalid-request and internal-error outcomes.
+
+What it does NOT do: notification bodies are not handled, batching is not
+implemented, and there is no transport, no MCP lifecycle and no independent
+client interoperating with it.
 `PROJECT_BRIEF.md` §2 and `docs/audits/recon-2026-10-21.adoc` (C06) record that
 gap; do not describe this module as JSON-RPC conformance.
 """

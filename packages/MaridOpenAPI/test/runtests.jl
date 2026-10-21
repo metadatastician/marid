@@ -7,15 +7,41 @@ using MaridIR
 using MaridOpenAPI
 
 @testset "MaridOpenAPI Tests" begin
+    # The output type must be declared: an undeclared one would make the emitter
+    # write a `$ref` to a component that does not exist.
+    taxon = TypeDescriptor("Taxon", [FieldDescriptor("id", PrimitiveType("String"))])
     m = MethodDescriptor("getTaxon", "String", "Taxon", route_path="/taxon/:id",
                          http_method="GET", description="Retrieve taxon")
-    svc = ServiceDescriptor("TaxonomyService", "1.0.0", TypeDescriptor[], [m])
+    svc = ServiceDescriptor("TaxonomyService", "1.0.0", [taxon], [m])
 
     spec = emit_openapi_json(svc)
 
     @test occursin("\"openapi\": \"3.1.0\"", spec)
     @test occursin("\"title\": \"TaxonomyService\"", spec)
     @test occursin("\"operationId\": \"getTaxon\"", spec)
+end
+
+@testset "Undeclared object types are refused, not emitted as dangling refs" begin
+    # `ID` arrives as an ObjectType (it is not a primitive in the IR) and is
+    # mapped to a string schema rather than a reference to nothing.
+    id_type = TypeDescriptor("Widget", [FieldDescriptor("id", "ID")])
+    svc_id = ServiceDescriptor("WidgetService", "1.0.0", [id_type], [
+        MethodDescriptor("getWidget", "String", "Widget", http_method="GET")])
+    doc = JSON3.read(emit_openapi_json(svc_id))
+    @test doc.components.schemas[:Widget].properties[:id].type == "string"
+
+    # Anything else undeclared is a descriptor bug: fail with the name in the
+    # message instead of publishing a document with a reference to nothing.
+    svc_bad = ServiceDescriptor("BrokenService", "1.0.0", TypeDescriptor[], [
+        MethodDescriptor("getThing", "String", "Thing", http_method="GET")])
+    err = try
+        emit_openapi_json(svc_bad)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ErrorException
+    @test occursin("Thing", sprint(showerror, err))
 end
 
 @testset "Spec is valid JSON and OpenAPI-shaped (C07)" begin

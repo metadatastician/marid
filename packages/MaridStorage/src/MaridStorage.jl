@@ -33,18 +33,27 @@ InMemoryEngine() = InMemoryEngine(Dict{String, Dict{String, Any}}())
 
 function put_entity!(engine::InMemoryEngine, collection::String, id::String, data::Dict{String, Any})
     key = "$collection/$id"
-    engine.records[key] = copy(data)
+    # `deepcopy` on write AND on read. A shallow `copy` copies only the top
+    # level: a caller who kept a reference to a nested Dict or Vector could
+    # mutate the stored record after the write, and a caller who received one
+    # could mutate it without going through put_entity!. Nested values are the
+    # common case here (a clade's children, a node's tags), so the shallow
+    # version did not deliver the isolation the comment claimed
+    # (recon-2026-10-21, P14).
+    engine.records[key] = deepcopy(data)
     engine.records[key]["_id"] = key
-    return engine.records[key]
+    # Return a copy, not the stored dictionary: returning the internal object
+    # would hand every caller a writable handle on the engine's state.
+    return deepcopy(engine.records[key])
 end
 
 function get_entity(engine::InMemoryEngine, collection::String, id::String)
     key = "$collection/$id"
     record = get(engine.records, key, nothing)
-    # Copy on read: handing out the stored dictionary let a caller mutate the
-    # store without going through put_entity!, and made "engine" semantics a lie
-    # (recon-2026-10-21, P14).
-    return record === nothing ? nothing : copy(record)
+    # Deep copy on read: handing out the stored dictionary let a caller mutate
+    # the store without going through put_entity!, and made "engine" semantics a
+    # lie (recon-2026-10-21, P14). Shallow `copy` only protected the top level.
+    return record === nothing ? nothing : deepcopy(record)
 end
 
 function delete_entity!(engine::InMemoryEngine, collection::String, id::String)
@@ -57,7 +66,7 @@ function query_entities(engine::InMemoryEngine, collection::String; filter_fn::F
     results = Dict{String, Any}[]
     for (k, v) in engine.records
         if startswith(k, prefix) && filter_fn(v)
-            push!(results, copy(v))
+            push!(results, deepcopy(v))
         end
     end
     return results
@@ -96,7 +105,18 @@ end
 ArangoStorageEngine(endpoint::String="http://127.0.0.1:8529", database::String="_system"; mock::Bool=false) =
     ArangoStorageEngine(endpoint, database, InMemoryEngine(), mock)
 
-"True only for an explicitly constructed test double."
+"""
+    is_mock(engine::StorageEngine) -> Bool
+
+True for an engine that exists only to stand in for a real backend.
+
+Defined on the abstract type so a caller holding a generic `StorageEngine` can
+ask the question without dispatching on a concrete type and hitting a
+`MethodError`. `InMemoryEngine` is documented as test storage, so it answers
+`true`; `ArangoStorageEngine` answers its `mock` flag, because a
+non-mock Arango engine is intended (though not yet able) to be real.
+"""
+is_mock(::StorageEngine)::Bool = true
 is_mock(engine::ArangoStorageEngine)::Bool = engine.mock
 
 function _require_mock(engine::ArangoStorageEngine, operation::AbstractString)

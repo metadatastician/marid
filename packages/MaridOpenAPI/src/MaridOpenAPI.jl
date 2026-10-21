@@ -29,7 +29,7 @@ export emit_openapi_json
 const _VOID_SCHEMA = Dict{String, Any}("type" => "null")
 
 """JSON Schema for one `TypeRef` (OpenAPI 3.1 uses JSON Schema 2020-12)."""
-function _json_schema(ref::TypeRef)::Dict{String, Any}
+function _json_schema(ref::TypeRef, known::Set{String})::Dict{String, Any}
     if ref isa PrimitiveType
         name = ref.name
         name == "String" && return Dict{String, Any}("type" => "string")
@@ -44,15 +44,23 @@ function _json_schema(ref::TypeRef)::Dict{String, Any}
         name == "Void" && return copy(_VOID_SCHEMA)
         return Dict{String, Any}("type" => "string")
     elseif ref isa ObjectType
+        # `ID` is used as a type name in descriptors but is not a primitive in
+        # the IR, so it arrives here as an ObjectType. Emitting a `$ref` to a
+        # component that no schema defines produces a document an independent
+        # validator rejects, so it is mapped explicitly.
+        ref.name == "ID" && return Dict{String, Any}("type" => "string")
+        ref.name in known || error(
+            "Object type '$(ref.name)' is referenced but not declared in svc.types; " *
+            "the emitted \$ref would dangle. Declare the type or emit a primitive.")
         return Dict{String, Any}("\$ref" => "#/components/schemas/$(ref.name)")
     elseif ref isa ListType
-        return Dict{String, Any}("type" => "array", "items" => _json_schema(ref.element_type))
+        return Dict{String, Any}("type" => "array", "items" => _json_schema(ref.element_type, known))
     elseif ref isa OptionalType
         # 3.1 has no `nullable`; null is a type in the type union.
-        return Dict{String, Any}("anyOf" => Any[_json_schema(ref.inner_type), copy(_VOID_SCHEMA)])
+        return Dict{String, Any}("anyOf" => Any[_json_schema(ref.inner_type, known), copy(_VOID_SCHEMA)])
     elseif ref isa MapType
         return Dict{String, Any}("type" => "object",
-                                 "additionalProperties" => _json_schema(ref.value_type))
+                                 "additionalProperties" => _json_schema(ref.value_type, known))
     end
     return Dict{String, Any}()
 end
@@ -73,9 +81,10 @@ function _openapi_path(m::MethodDescriptor)
     return join(segments, '/'), parameters
 end
 
-function _body_schema(type_name::String)::Dict{String, Any}
-    type_name in MaridIR.PRIMITIVE_NAMES && return _json_schema(PrimitiveType(type_name))
-    return _json_schema(ObjectType(type_name))
+function _body_schema(type_name::String, known::Set{String})::Dict{String, Any}
+    type_name == "Void" && return copy(_VOID_SCHEMA)
+    type_name in MaridIR.PRIMITIVE_NAMES && return _json_schema(PrimitiveType(type_name), known)
+    return _json_schema(ObjectType(type_name), known)
 end
 
 """
@@ -91,12 +100,13 @@ serialiser, so a description containing quotes, newlines or non-BMP characters
 cannot corrupt the document.
 """
 function emit_openapi_json(svc::ServiceDescriptor)::String
+    known = Set{String}(t.name for t in svc.types)
     schemas = Dict{String, Any}()
     for t in svc.types
         properties = Dict{String, Any}()
         required = String[]
         for f in t.fields
-            properties[f.name] = _json_schema(f.type_ref)
+            properties[f.name] = _json_schema(f.type_ref, known)
             f.nullable || push!(required, f.name)
         end
         schema = Dict{String, Any}("type" => "object", "properties" => properties)
@@ -116,7 +126,7 @@ function emit_openapi_json(svc::ServiceDescriptor)::String
                     "description" => "Successful operation",
                     "content" => Dict{String, Any}(
                         "application/json" => Dict{String, Any}(
-                            "schema" => _body_schema(m.output_type)))),
+                            "schema" => _body_schema(m.output_type, known)))),
                 "default" => Dict{String, Any}(
                     "description" => "Error (RFC 9457 problem details)",
                     "content" => Dict{String, Any}(
@@ -129,7 +139,7 @@ function emit_openapi_json(svc::ServiceDescriptor)::String
                 "required" => true,
                 "content" => Dict{String, Any}(
                     "application/json" => Dict{String, Any}(
-                        "schema" => _body_schema(m.input_type))))
+                        "schema" => _body_schema(m.input_type, known))))
         end
         # Merge per operation instead of appending a second "path" key.
         entry = get!(paths, path, Dict{String, Any}())

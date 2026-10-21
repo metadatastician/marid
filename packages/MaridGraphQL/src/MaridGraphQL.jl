@@ -48,13 +48,22 @@ function _scalar_declarations(svc::ServiceDescriptor)::Vector{String}
             _collect_scalars!(used, f.type_ref)
         end
     end
+    # Only PRIMITIVES may contribute a scalar declaration. Taking
+    # `get(_SCALAR_MAP, name, name)` for a method's input/output type pushed the
+    # raw name through for anything unmapped, so an object type `Entity` became
+    # `scalar Entity` — a second declaration of a name also used by `type
+    # Entity`, which makes the schema invalid (GraphQL has one namespace for
+    # type names). An object type is never a scalar.
     for m in svc.methods
-        push!(used, get(_SCALAR_MAP, m.input_type, m.input_type))
-        push!(used, get(_SCALAR_MAP, m.output_type, m.output_type))
+        for type_name in (m.input_type, m.output_type)
+            type_name in MaridIR.PRIMITIVE_NAMES || continue
+            push!(used, get(_SCALAR_MAP, type_name, "String"))
+        end
     end
-    delete!(used, "Int")
-    delete!(used, "Int64")
-    delete!(used, "UInt32")
+    # Mapped-to-builtin: GraphQL defines these, so no declaration is needed.
+    for builtin in ("Int", "Float", "String", "Boolean", "ID")
+        delete!(used, builtin)
+    end
     declared = String[]
     for name in sort!(collect(used))
         name in ("String", "Boolean", "Int", "Float", "ID") && continue
@@ -93,12 +102,19 @@ function _type_name(ref::TypeRef)::String
     end
 end
 
-"""`TypeRef` field with `!` where the field is non-nullable."""
+"""
+`TypeRef` field with `!` where the field is non-nullable.
+
+`Void` is never non-null: it is declared as "always null", so `Void!` would be a
+field no resolver could ever satisfy.
+"""
 function _field_type(f::FieldDescriptor)::String
     name = _type_name(f.type_ref)
-    nullable = f.nullable || f.type_ref isa OptionalType
+    nullable = f.nullable || f.type_ref isa OptionalType || _is_void(f.type_ref)
     return nullable ? name : name * "!"
 end
+
+_is_void(ref::TypeRef) = ref isa PrimitiveType && ref.name == "Void"
 
 """
     emit_graphql_sdl(svc::ServiceDescriptor) -> String
@@ -108,7 +124,9 @@ Emit GraphQL SDL from a service descriptor.
 Methods with `GET` become `Query` fields, everything else `Mutation` fields.
 A `Query` type is always emitted (with a placeholder field when no method maps
 to it), because a schema without a query type is invalid. Argument types are
-declared as input objects, so the output validates rather than merely rendering.
+declared as input objects with distinct `<Name>Input` names and real fields, so
+the output validates rather than merely rendering: GraphQL forbids two types
+sharing a name and forbids an input object with no fields.
 """
 function emit_graphql_sdl(svc::ServiceDescriptor)::String
     lines = String[]
@@ -136,18 +154,28 @@ function emit_graphql_sdl(svc::ServiceDescriptor)::String
     mutations = filter(m -> uppercase(m.http_method) != "GET", svc.methods)
 
     # Input objects, so arguments have declared types.
-    input_types = Set{String}()
-    builtin_scalars = ("ID", "String", "Int", "Float", "Boolean")
-    for m in svc.methods
-        m.input_type == "Void" && continue
-        m.input_type in MaridIR.PRIMITIVE_NAMES && continue
-        # `ID` is a GraphQL built-in scalar; declaring `input ID` would collide
-        # with it and make the schema invalid.
-        m.input_type in builtin_scalars && continue
-        push!(input_types, m.input_type)
-    end
+    #
+    # A GraphQL input object needs its own name and at least one field. Emitting
+    # `input Entity` for a descriptor that also emits `type Entity` declared one
+    # name twice, and the bare declaration had no fields at all — invalid on both
+    # counts. Inputs are therefore named `<Name>Input`, carry the type's fields,
+    # and object references inside them point at the matching input type.
+    by_name = Dict{String, TypeDescriptor}(t.name => t for t in svc.types)
+    input_types = _input_object_names(svc, by_name)
     for name in sort!(collect(input_types))
-        push!(lines, "input $name")
+        push!(lines, "input $(_input_name(name)) {")
+        t = by_name[name]
+        if isempty(t.fields)
+            # GraphQL forbids an input object with no fields. An empty message
+            # type is still reachable, so declare one inert field rather than
+            # emit an invalid block.
+            push!(lines, "  _empty: Boolean")
+        else
+            for f in t.fields
+                push!(lines, "  $(f.name): $(_input_field_type(f.type_ref, f.nullable))")
+            end
+        end
+        push!(lines, "}")
         push!(lines, "")
     end
 
@@ -175,6 +203,68 @@ function emit_graphql_sdl(svc::ServiceDescriptor)::String
     return join(lines, "\n")
 end
 
+"Name of the input-object twin of an object type, kept distinct from `type X`."
+_input_name(type_name::String)::String = type_name * "Input"
+
+"""
+Object types reachable as *inputs*, transitively.
+
+An input field cannot reference an output object type, so every object a method
+consumes — including ones nested inside a field — needs an `input` twin
+declaration or the reference dangles.
+"""
+function _input_object_names(svc::ServiceDescriptor, by_name::Dict{String, TypeDescriptor})::Set{String}
+    found = Set{String}()
+    pending = String[]
+    for m in svc.methods
+        m.input_type in keys(by_name) && push!(pending, m.input_type)
+    end
+    while !isempty(pending)
+        name = pop!(pending)
+        name in found && continue
+        push!(found, name)
+        for f in by_name[name].fields
+            _collect_object_names!(pending, f.type_ref, by_name)
+        end
+    end
+    return found
+end
+
+function _collect_object_names!(pending::Vector{String}, ref::TypeRef, by_name::Dict{String, TypeDescriptor})
+    if ref isa ObjectType
+        ref.name in keys(by_name) && push!(pending, ref.name)
+    elseif ref isa ListType
+        _collect_object_names!(pending, ref.element_type, by_name)
+    elseif ref isa OptionalType
+        _collect_object_names!(pending, ref.inner_type, by_name)
+    elseif ref isa MapType
+        _collect_object_names!(pending, ref.value_type, by_name)
+    end
+    return pending
+end
+
+"Input-field type: primitives map to scalars, objects to their input twins."
+function _input_field_type(ref::TypeRef, nullable::Bool)::String
+    name = _input_type_name(ref)
+    optional = nullable || ref isa OptionalType || _is_void(ref)
+    return optional ? name : name * "!"
+end
+
+function _input_type_name(ref::TypeRef)::String
+    if ref isa PrimitiveType
+        return get(_SCALAR_MAP, ref.name, "String")
+    elseif ref isa ObjectType
+        return _input_name(ref.name)
+    elseif ref isa ListType
+        return "[" * _input_type_name(ref.element_type) * "]"
+    elseif ref isa OptionalType
+        return _input_type_name(ref.inner_type)
+    elseif ref isa MapType
+        return "JSON"
+    end
+    return "String"
+end
+
 function _body_type(type_name::String)::String
     type_name in MaridIR.PRIMITIVE_NAMES && return get(_SCALAR_MAP, type_name, "String")
     return type_name
@@ -185,7 +275,7 @@ function _argument_list(m::MethodDescriptor)::String
     if m.input_type in MaridIR.PRIMITIVE_NAMES
         return "(input: " * get(_SCALAR_MAP, m.input_type, "String") * ")"
     end
-    return "(input: $(m.input_type))"
+    return "(input: $(_input_name(m.input_type)))"
 end
 
 """

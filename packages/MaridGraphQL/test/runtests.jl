@@ -18,9 +18,13 @@ using MaridGraphQL
     @test occursin("id: ID!", sdl)
     @test occursin("type Query {", sdl)
     @test occursin("type Mutation {", sdl)
-    # Input objects must be declared, or the SDL does not validate.
-    @test occursin("input Entity", sdl)
-    @test occursin("createEntity(input: Entity): Entity", sdl)
+    # Input objects must be declared with their own name and real fields, or the
+    # SDL does not validate: `input Entity` collided with `type Entity`, and a
+    # fieldless input object is invalid GraphQL.
+    @test occursin("input EntityInput {", sdl)
+    @test occursin("id: ID!", sdl)
+    @test occursin("createEntity(input: EntityInput): Entity", sdl)
+    @test !occursin("input Entity {", sdl)
 
     res = execute_graphql_query("{ __schema { queryType { name } } }", svc)
     @test haskey(res, "data")
@@ -56,5 +60,40 @@ end
     @test occursin("scalar Void", sdl)
     @test occursin("scalar JSON", sdl)
     @test occursin("raw: Bytes!", sdl)
-    @test occursin("nothing: Void!", sdl)
+    # `Void` means "always null", so a non-null Void field could never be
+    # satisfied by any resolver.
+    @test occursin("nothing: Void\n", sdl)
+    @test !occursin("Void!", sdl)
+end
+
+@testset "Declared type names are unique (C08)" begin
+    # GraphQL keeps one namespace for type names. Declaring `scalar Entity`,
+    # `type Entity` and `input Entity` is three collisions that every validator
+    # rejects, and `occursin` assertions alone will not notice them.
+    node = TypeDescriptor("Node", [
+        FieldDescriptor("id", PrimitiveType("String")),
+        FieldDescriptor("children", ListType(ObjectType("Node"))),
+        FieldDescriptor("labels", MapType(PrimitiveType("String"), PrimitiveType("String")))
+    ])
+    svc = ServiceDescriptor("GraphService", "1.0.0", [node], [
+        MethodDescriptor("getNode", "String", "Node", http_method="GET"),
+        MethodDescriptor("createNode", "Node", "Node", http_method="POST")
+    ])
+    sdl = emit_graphql_sdl(svc)
+
+    declared = String[]
+    for m in eachmatch(r"^(scalar|type|input)\s+([A-Za-z_][A-Za-z0-9_]*)\b"m, sdl)
+        push!(declared, String(m.captures[2]))
+    end
+    @test !isempty(declared)
+    # Uniqueness is the property; the exact set membership is incidental.
+    @test length(declared) == length(unique(declared))
+    @test "Node" in declared
+    @test "NodeInput" in declared
+    @test !("Node" in [m.captures[2] for m in eachmatch(r"^scalar\s+([A-Za-z_][A-Za-z0-9_]*)"m, sdl)])
+
+    # Nested object references inside an input must point at the input twin, or
+    # the reference dangles: an input field cannot be an output object type.
+    @test occursin("children: [NodeInput]!", sdl)
+    @test !occursin("children: [Node]!", sdl)
 end

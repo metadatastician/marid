@@ -30,15 +30,24 @@ using MaridRPC
 end
 
 @testset "Internal errors are redacted (C06)" begin
+    # A marker that reads as sensitive without looking like a real credential:
+    # a literal connection string in a fixture tends to trip secret scanners and
+    # teaches the wrong lesson about what the test is checking.
     registry = Dict{String, Function}(
-        "boom" => params -> error("postgres://user:hunter2@db/marid")
+        "boom" => params -> error("SECRET-MARKER-DO-NOT-LEAK db-host-internal")
     )
-    res = dispatch_rpc(RpcRequest("2.0", "boom", Dict{String, Any}(), 4), registry)
+    # The contract has two halves: the client gets a fixed message, and the
+    # detail goes to the log. Assert both, and keep the log record out of the
+    # test output while doing it.
+    local res
+    @test_logs (:error, r"MaridRPC handler failed") begin
+        res = dispatch_rpc(RpcRequest("2.0", "boom", Dict{String, Any}(), 4), registry)
+    end
     @test res.error["code"] == -32603
     @test res.error["message"] == "Internal error"
     # The whole point: nothing about the failure crosses the wire.
-    @test !occursin("hunter2", res.error["message"])
-    @test !occursin("postgres", res.error["message"])
+    @test !occursin("SECRET-MARKER", res.error["message"])
+    @test !occursin("db-host-internal", res.error["message"])
     @test res.id == 4
 end
 

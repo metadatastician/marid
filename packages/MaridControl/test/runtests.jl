@@ -39,6 +39,32 @@ using MaridControl
         @test !haskey(get_snapshot(cfg).data, "b")
     end
 
+    # 1c. A swap is unconditional: interleaving with other writers must not make
+    # it throw. The previous compare-and-swap could fail exactly here.
+    @testset "swap_snapshot! cannot fail under concurrent writers" begin
+        cfg = AtomicConfig(Snapshot(0, MaridControl.now(MaridControl.UTC),
+                                    Dict{String, Any}("a" => 0)))
+
+        errors_seen = Base.Threads.Atomic{Int}(0)
+        tasks = [Threads.@spawn begin
+            try
+                for i in 1:50
+                    swap_snapshot!(cfg, Snapshot(i, MaridControl.now(MaridControl.UTC),
+                                                 Dict{String, Any}("a" => i)))
+                    update_snapshot!(d -> d, cfg)
+                    get_snapshot(cfg)
+                end
+            catch
+                Base.Threads.atomic_add!(errors_seen, 1)
+            end
+        end for _ in 1:4]
+        foreach(wait, tasks)
+
+        @test errors_seen[] == 0
+        # Some writer's snapshot is installed and readable.
+        @test get_snapshot(cfg) isa Snapshot
+    end
+
     # 2. Sequential Log Abstraction
     @testset "Sequential Log Append & Playback" begin
         log = SequentialLog()

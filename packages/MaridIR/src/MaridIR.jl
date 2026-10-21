@@ -224,7 +224,12 @@ function _type_ref_to_dict(ref::TypeRef)::Any
             "key" => _type_ref_to_dict(ref.key_type),
             "value" => _type_ref_to_dict(ref.value_type)))
     end
-    return "Unsupported"
+    # Fail loudly rather than emit a placeholder. Returning a marker string here
+    # would reproduce the exact defect this function replaced: a descriptor that
+    # renders to something lossy and indistinguishable from real data. A
+    # `TypeRef` subtype this file does not know how to serialise is a bug in the
+    # type system, not a document to be published.
+    error("Unsupported TypeRef kind $(typeof(ref)); cannot serialise it losslessly")
 end
 
 # Serialization to pure Dict (golden testable)

@@ -290,15 +290,23 @@ case "${1:-help}" in
         # docs/audits/recon-2026-10-21.adoc (C01).
         cd "$MARID_ROOT"
         command -v julia >/dev/null 2>&1 || {
-            echo "marid: julia not found on PATH; this recipe runs 13 Julia suites." >&2
+            echo "marid: julia not found on PATH; this recipe runs the Julia suites under packages/." >&2
             echo "marid: install the pinned toolchain (mise.toml) or use --project=<pkg> directly." >&2
             exit 2
         }
-        packages=(
-            MaridIR MaridCodec MaridOpenAPI MaridRPC MaridGraphQL MaridTransport
-            MaridCore MaridArango MaridStorage MaridControl MaridLive MaridCRDT
-            MaridRaft
-        )
+        # Derived from the filesystem, not hard-coded: a package list copied from
+        # the CI matrix is a second source of truth that silently stops covering
+        # new packages. Anything with a test suite is tested.
+        packages=()
+        for suite in packages/*/test/runtests.jl; do
+            [[ -f "$suite" ]] || continue
+            pkg=${suite#packages/}
+            packages+=("${pkg%%/*}")
+        done
+        if [[ ${#packages[@]} -eq 0 ]]; then
+            echo "marid: no packages/*/test/runtests.jl found under $MARID_ROOT" >&2
+            exit 2
+        fi
         failed=0
         for pkg in "${packages[@]}"; do
             suite="packages/$pkg/test/runtests.jl"

@@ -42,6 +42,38 @@ using MaridStorage
         @test get_entity(storage, "nodes", "1")["name"] == "Original"
     end
 
+    # 1c. The copy is DEEP: nested values are the case that matters (P14)
+    @testset "InMemoryEngine isolates nested values" begin
+        storage = InMemoryEngine()
+
+        # A caller who keeps a reference to nested data must not be able to
+        # change the store after the write.
+        payload = Dict{String, Any}("name" => "Clade", "tags" => ["a"], "meta" => Dict{String, Any}("n" => 1))
+        put_entity!(storage, "nodes", "1", payload)
+        push!(payload["tags"], "smuggled-after-write")
+        payload["meta"]["n"] = 99
+        @test get_entity(storage, "nodes", "1")["tags"] == ["a"]
+        @test get_entity(storage, "nodes", "1")["meta"]["n"] == 1
+
+        # A caller who mutates a nested value of a read result must not change
+        # the store either. Shallow `copy` failed this.
+        got = get_entity(storage, "nodes", "1")
+        push!(got["tags"], "smuggled-after-read")
+        got["meta"]["n"] = 42
+        @test get_entity(storage, "nodes", "1")["tags"] == ["a"]
+        @test get_entity(storage, "nodes", "1")["meta"]["n"] == 1
+
+        # Same via query_entities.
+        listed = query_entities(storage, "nodes")[1]
+        push!(listed["tags"], "smuggled-via-query")
+        @test get_entity(storage, "nodes", "1")["tags"] == ["a"]
+
+        # And put_entity! must not return a writable handle on the store.
+        returned = put_entity!(storage, "nodes", "2", Dict{String, Any}("tags" => ["b"]))
+        push!(returned["tags"], "smuggled-via-return")
+        @test get_entity(storage, "nodes", "2")["tags"] == ["b"]
+    end
+
     # 2. The Arango seam refuses to pretend (C05)
     @testset "ArangoStorageEngine is not silently in-memory" begin
         # Default construction is NOT a working backend: every operation throws
@@ -67,6 +99,12 @@ using MaridStorage
         # The explicit test double still works, and says so.
         double = ArangoStorageEngine("http://127.0.0.1:8529", "biomodel_test"; mock=true)
         @test is_mock(double)
+
+        # `is_mock` is exported, so it must answer for every engine rather than
+        # throwing a MethodError on the ones without their own method.
+        @test is_mock(InMemoryEngine()) == true
+        @test is_mock(double) == true
+        @test is_mock(arango_storage) == false
         put_entity!(double, "edges", "e1",
             Dict{String, Any}("_from" => "nodes/1", "_to" => "nodes/2", "weight" => 0.99))
         e = get_entity(double, "edges", "e1")
