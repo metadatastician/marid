@@ -10,8 +10,9 @@ These functions build wire fragments: an attribute, an HTML element, a response
 header, an SSE block. Two rules apply to every one of them:
 
 * Anything that becomes JSON is written by JSON3, never by string interpolation.
-  The previous `"\"$k\": \"$v\""` form produced invalid JSON for any value
-  containing a quote, and non-JSON Julia syntax for non-strings
+  The previous form interpolated each key and value directly into the JSON text,
+  which produced invalid JSON for any value containing a quote and produced
+  Julia syntax rather than JSON for non-strings
   (`docs/audits/recon-2026-10-21.adoc`, C09).
 * Anything that becomes an HTML attribute is escaped, and anything that becomes
   a header value is rejected if it contains CR or LF, so a value cannot break out
