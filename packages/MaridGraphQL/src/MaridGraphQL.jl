@@ -280,6 +280,10 @@ function _argument_list(m::MethodDescriptor)::String
     if m.input_type in MaridIR.PRIMITIVE_NAMES
         return "(input: " * get(_SCALAR_MAP, m.input_type, "String") * ")"
     end
+    # `ID` reads as an ObjectType here (it is not an IR primitive) but is a
+    # GraphQL built-in scalar. Without this it becomes `IDInput`, which no
+    # declaration ever introduces.
+    m.input_type == "ID" && return "(input: ID)"
     return "(input: $(_input_name(m.input_type)))"
 end
 
