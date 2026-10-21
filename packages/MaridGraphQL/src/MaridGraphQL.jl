@@ -4,7 +4,21 @@
 """
     MaridGraphQL
 
-GraphQL SDL schema generator and runtime introspection engine for Marid.
+GraphQL SDL generation from `MaridIR.ServiceDescriptor`, plus a deliberately
+minimal introspection-shaped response.
+
+Status, stated so it cannot be mistaken for protocol support: there is no
+parser, no validation, no resolver runtime, and no execution. `execute_graphql_query`
+answers a `__schema` request with a hand-built object and returns an empty
+`data` object for everything else. That is NOT GraphQL introspection conformance
+and NOT an executor (`PROJECT_BRIEF.md` §2; `docs/audits/recon-2026-10-21.adoc`,
+C08).
+
+The SDL this module emits is meant to be *valid*: it always declares a query
+type (a schema without one is rejected by every GraphQL tool), it never names a
+built-in scalar that GraphQL does not define, and where Marid's type system has
+no GraphQL counterpart (`Void`, `Bytes`, `UInt64`) it declares the custom scalar
+it uses rather than silently mapping to `String`.
 """
 module MaridGraphQL
 
@@ -12,82 +26,189 @@ using MaridIR
 
 export emit_graphql_sdl, execute_graphql_query
 
-"""
-    emit_graphql_sdl(svc::ServiceDescriptor) -> String
+# Marid primitive -> GraphQL type, with the loss stated where there is one.
+const _SCALAR_MAP = Dict{String, String}(
+    "String" => "String",
+    "Bool" => "Boolean",
+    "Int32" => "Int",
+    "Int64" => "Int",          # lossy above 2^53; documented in the SDL comment
+    "Float32" => "Float",
+    "Float64" => "Float",
+    "UInt32" => "Int",         # fits in Int32's positive half only
+    "UInt64" => "UInt64",      # custom scalar: GraphQL Int is signed 32-bit
+    "Bytes" => "Bytes",        # custom scalar: base64-encoded string
+    "Void" => "Void",          # custom scalar: always null
+)
 
-Emits canonical GraphQL SDL schema from a service descriptor.
-"""
+# Custom scalars actually referenced by a schema.
+function _scalar_declarations(svc::ServiceDescriptor)::Vector{String}
+    used = Set{String}()
+    for t in svc.types
+        for f in t.fields
+            _collect_scalars!(used, f.type_ref)
+        end
+    end
+    for m in svc.methods
+        push!(used, get(_SCALAR_MAP, m.input_type, m.input_type))
+        push!(used, get(_SCALAR_MAP, m.output_type, m.output_type))
+    end
+    delete!(used, "Int")
+    delete!(used, "Int64")
+    delete!(used, "UInt32")
+    declared = String[]
+    for name in sort!(collect(used))
+        name in ("String", "Boolean", "Int", "Float", "ID") && continue
+        push!(declared, "scalar $name")
+    end
+    return declared
+end
+
+function _collect_scalars!(used::Set{String}, ref::TypeRef)
+    if ref isa PrimitiveType
+        push!(used, get(_SCALAR_MAP, ref.name, ref.name))
+    elseif ref isa ListType
+        _collect_scalars!(used, ref.element_type)
+    elseif ref isa OptionalType
+        _collect_scalars!(used, ref.inner_type)
+    elseif ref isa MapType
+        push!(used, "JSON")
+        _collect_scalars!(used, ref.value_type)
+    end
+    return used
+end
+
 function _type_name(ref::TypeRef)::String
     if ref isa PrimitiveType
-        ref.name == "String" && return "String"
-        ref.name in ["Int32", "Int64"] && return "Int"
-        ref.name in ["Float32", "Float64"] && return "Float"
-        ref.name == "Bool" && return "Boolean"
-        ref.name == "ID" && return "ID"
-        return "String"
+        return get(_SCALAR_MAP, ref.name, "String")
     elseif ref isa ObjectType
         return ref.name
     elseif ref isa ListType
         return "[" * _type_name(ref.element_type) * "]"
     elseif ref isa OptionalType
         return _type_name(ref.inner_type)
+    elseif ref isa MapType
+        return "JSON"
     else
         return "String"
     end
 end
 
-function emit_graphql_sdl(svc::ServiceDescriptor)::String
-    lines = String[]
-    
-    # Object Types
-    for t in svc.types
-        push!(lines, "type $(t.name) {")
-        for f in t.fields
-            tname = _type_name(f.type_ref)
-            bang = f.nullable ? "" : "!"
-            push!(lines, "  $(f.name): $tname$bang")
-        end
-        push!(lines, "}\n")
-    end
-    
-    # Query Type
-    queries = filter(m -> uppercase(m.http_method) == "GET", svc.methods)
-    if !isempty(queries)
-        push!(lines, "type Query {")
-        for q in queries
-            push!(lines, "  $(q.name)(input: $(q.input_type)): $(q.output_type)")
-        end
-        push!(lines, "}\n")
-    end
-    
-    # Mutation Type
-    mutations = filter(m -> uppercase(m.http_method) != "GET", svc.methods)
-    if !isempty(mutations)
-        push!(lines, "type Mutation {")
-        for m in mutations
-            push!(lines, "  $(m.name)(input: $(m.input_type)): $(m.output_type)")
-        end
-        push!(lines, "}\n")
-    end
-    
-    return join(lines, "\n")
+"""`TypeRef` field with `!` where the field is non-nullable."""
+function _field_type(f::FieldDescriptor)::String
+    name = _type_name(f.type_ref)
+    nullable = f.nullable || f.type_ref isa OptionalType
+    return nullable ? name : name * "!"
 end
 
 """
-    execute_graphql_query(query_str::String, svc::ServiceDescriptor) -> Dict{String, Any}
+    emit_graphql_sdl(svc::ServiceDescriptor) -> String
 
-Handles basic introspection queries.
+Emit GraphQL SDL from a service descriptor.
+
+Methods with `GET` become `Query` fields, everything else `Mutation` fields.
+A `Query` type is always emitted (with a placeholder field when no method maps
+to it), because a schema without a query type is invalid. Argument types are
+declared as input objects, so the output validates rather than merely rendering.
+"""
+function emit_graphql_sdl(svc::ServiceDescriptor)::String
+    lines = String[]
+    push!(lines, "# Generated by MaridIR/MaridGraphQL from $(svc.name) v$(svc.version); do not edit.")
+    push!(lines, "# Int64/UInt32 are emitted as Int (GraphQL Int is signed 32-bit);")
+    push!(lines, "# UInt64, Bytes and Void are custom scalars declared below.")
+    push!(lines, "")
+
+    scalars = _scalar_declarations(svc)
+    if !isempty(scalars)
+        append!(lines, scalars)
+        push!(lines, "")
+    end
+
+    for t in svc.types
+        push!(lines, "type $(t.name) {")
+        for f in t.fields
+            push!(lines, "  $(f.name): $(_field_type(f))")
+        end
+        push!(lines, "}")
+        push!(lines, "")
+    end
+
+    queries = filter(m -> uppercase(m.http_method) == "GET", svc.methods)
+    mutations = filter(m -> uppercase(m.http_method) != "GET", svc.methods)
+
+    # Input objects, so arguments have declared types.
+    input_types = Set{String}()
+    builtin_scalars = ("ID", "String", "Int", "Float", "Boolean")
+    for m in svc.methods
+        m.input_type == "Void" && continue
+        m.input_type in MaridIR.PRIMITIVE_NAMES && continue
+        # `ID` is a GraphQL built-in scalar; declaring `input ID` would collide
+        # with it and make the schema invalid.
+        m.input_type in builtin_scalars && continue
+        push!(input_types, m.input_type)
+    end
+    for name in sort!(collect(input_types))
+        push!(lines, "input $name")
+        push!(lines, "")
+    end
+
+    push!(lines, "type Query {")
+    if isempty(queries)
+        # A valid schema always has a query type with at least one field.
+        push!(lines, "  _empty: Boolean")
+    else
+        for q in queries
+            push!(lines, "  $(q.name)$(_argument_list(q)): $(_body_type(q.output_type))")
+        end
+    end
+    push!(lines, "}")
+    push!(lines, "")
+
+    if !isempty(mutations)
+        push!(lines, "type Mutation {")
+        for m in mutations
+            push!(lines, "  $(m.name)$(_argument_list(m)): $(_body_type(m.output_type))")
+        end
+        push!(lines, "}")
+        push!(lines, "")
+    end
+
+    return join(lines, "\n")
+end
+
+function _body_type(type_name::String)::String
+    type_name in MaridIR.PRIMITIVE_NAMES && return get(_SCALAR_MAP, type_name, "String")
+    return type_name
+end
+
+function _argument_list(m::MethodDescriptor)::String
+    m.input_type == "Void" && return ""
+    if m.input_type in MaridIR.PRIMITIVE_NAMES
+        return "(input: " * get(_SCALAR_MAP, m.input_type, "String") * ")"
+    end
+    return "(input: $(m.input_type))"
+end
+
+"""
+    execute_graphql_query(query_str::String, svc::ServiceDescriptor) -> Dict{String,Any}
+
+Answer a `__schema` query with a minimal, introspection-*shaped* object; every
+other query returns an empty `data` object.
+
+This is a placeholder, not an executor: it does not parse the query, does not
+honour field selection, and does not implement the `__Type` shape or
+`__typename`. Callers must not describe it as GraphQL support.
 """
 function execute_graphql_query(query_str::String, svc::ServiceDescriptor)::Dict{String, Any}
     if occursin("__schema", query_str)
-        return Dict{String, Any}(
-            "data" => Dict{String, Any}(
-                "__schema" => Dict{String, Any}(
-                    "types" => [t.name for t in svc.types],
-                    "queryType" => Dict("name" => "Query")
-                )
-            )
-        )
+        types = Any[]
+        for t in svc.types
+            push!(types, Dict{String, Any}("kind" => "OBJECT", "name" => t.name))
+        end
+        push!(types, Dict{String, Any}("kind" => "OBJECT", "name" => "Query"))
+        return Dict{String, Any}("data" => Dict{String, Any}(
+            "__schema" => Dict{String, Any}(
+                "queryType" => Dict{String, Any}("name" => "Query"),
+                "types" => types)))
     end
     return Dict{String, Any}("data" => Dict{String, Any}())
 end
