@@ -278,16 +278,60 @@ case "${1:-help}" in
         ' "$FILE"
         ;;
     check)
-        echo "Running Marid estate verification..."
-        python3 -c "
-import subprocess
-pkgs = ['MaridIR', 'MaridCodec', 'MaridOpenAPI', 'MaridRPC', 'MaridGraphQL', 'MaridTransport', 'MaridCore', 'ArangoDB', 'MaridStorage', 'MaridControl', 'MaridLive', 'MaridCRDT', 'MaridRaft']
-for p in pkgs:
-    res = subprocess.run(['julia', f'--project=packages/{p}', f'packages/{p}/test/runtests.jl'], capture_output=True)
-    assert res.returncode == 0, f'{p} failed: {res.stderr.decode()}'
-    print(f'  ✓ {p} passed')
-print('All 13 packages passed!')
-"
+        # The gate this recipe publishes is "every package suite passes". Four
+        # things are needed to mean that, and the previous implementation (a
+        # Python loop) had none of them: it named a package `ArangoDB` that has
+        # been `MaridArango` for weeks, so the loop could never pass; it did not
+        # bootstrap, so a fresh clone failed on intra-family path deps that CI
+        # develops first; it ran julia without --startup-file=no, so a user's
+        # startup file could change the result; and it asserted only a process
+        # return code, so a `julia` that exits 0 without running anything was
+        # reported as "All 13 packages passed!". See
+        # docs/audits/recon-2026-10-21.adoc (C01).
+        cd "$MARID_ROOT"
+        command -v julia >/dev/null 2>&1 || {
+            echo "marid: julia not found on PATH; this recipe runs 13 Julia suites." >&2
+            echo "marid: install the pinned toolchain (mise.toml) or use --project=<pkg> directly." >&2
+            exit 2
+        }
+        packages=(
+            MaridIR MaridCodec MaridOpenAPI MaridRPC MaridGraphQL MaridTransport
+            MaridCore MaridArango MaridStorage MaridControl MaridLive MaridCRDT
+            MaridRaft
+        )
+        failed=0
+        for pkg in "${packages[@]}"; do
+            suite="packages/$pkg/test/runtests.jl"
+            # A name that does not exist must be an error, never a pass. This is
+            # the exact defect C01 records.
+            if [[ ! -d "packages/$pkg" ]]; then
+                echo "marid: no such package directory: packages/$pkg" >&2
+                failed=1
+                continue
+            fi
+            if [[ ! -f "$suite" ]]; then
+                echo "marid: no test suite at $suite" >&2
+                failed=1
+                continue
+            fi
+            # Same two steps, same order, as .github/workflows/julia-ci.yml.
+            if ! julia --startup-file=no scripts/bootstrap.jl "packages/$pkg" >/dev/null; then
+                echo "marid: bootstrap FAILED for $pkg" >&2
+                failed=1
+                continue
+            fi
+            if ! julia --startup-file=no --project="packages/$pkg" "$suite"; then
+                echo "marid: test suite FAILED for $pkg" >&2
+                failed=1
+                continue
+            fi
+            echo "  ok  $pkg"
+        done
+        if [[ "$failed" -ne 0 ]]; then
+            echo "marid: at least one package suite failed (see above)" >&2
+            exit 1
+        fi
+        echo "All ${#packages[@]} package suites passed."
         ;;
     *)
         echo "Unknown command: $1" >&2

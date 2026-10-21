@@ -1,0 +1,1053 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= Marid reconnaissance and bug hunt, 2026-10-21
+:toc: left
+:toclevels: 2
+:sectnums:
+:icons: font
+:revdate: 2026-10-21
+
+[IMPORTANT]
+====
+This is a *fresh* reconnaissance at `3a417df` (the merge of #84), not a revision
+of `recon-2026-09-19.adoc`. It inherits that report's finding IDs (R01–R16) so
+the two can be read together, and it says explicitly which of them are now
+closed, which remain open, and which have regressed.
+
+The report is *static* for everything written in Julia. No Julia runtime could
+be installed in this sandbox (see <<_limits>>); every Julia finding below is
+derived from reading the source, and is labelled *not executed*. Shell, Bun,
+Nickel-adjacent and GitHub-API evidence *was* executed. Do not read a static
+finding as an observed failure.
+====
+
+== Scope, method, and what "done" would have meant
+
+Reviewed: all 13 packages under `packages/` (`src`, `ext`, `test`), both
+projects under `examples/`, the four packages under `web/`, `scripts/`,
+`benches/`, `test/`, `session/`, the 41 workflows and `actions.lock` under
+`.github/`, `.machine_readable/` (deed, arrival pack, coaptation, root allowlist),
+`Justfile` + `build/just/*.just`, `mise.toml`, `.tool-versions`, `PROJECT_BRIEF.md`,
+`docs/` status/audit/plan surfaces, and the live GitHub state of this repository
+and of its non-Julia dependencies.
+
+=== Evidence executed in this session
+
+[cols="2,1,4",options="header"]
+|===
+| Command / probe | Result | What it establishes
+
+| `bun install && bun test` (`web/`)
+| 13 pass, 0 fail, 27 assertions, 4 files
+| The four browser packages resolve by name through the workspace and their
+  unit tests pass on Bun 1.4.3. Not a browser test.
+
+| `just validate`
+| PASS
+| Only two recipes run: `validate-rsr` and `validate-ai-install`. See A03.
+
+| `just validate-repo-map`
+| `up to date`
+| The committed repository map matches the tree (before this file was added).
+
+| `just validate-coapt`
+| PASS
+| The coaptation receipt still verifies against the contractiles.
+
+| `just validate-claude-md`
+| `OK: CLAUDE.md arrival pack is present.`
+| It only checks presence. It cannot detect the drift it claims to detect (C02).
+
+| `just verify-template`
+| *FAIL*
+| C17: permanent false positives on the committed tree.
+
+| `bash scripts/check-root-shape.sh`
+| PASS (56 entries; 46 required)
+| Bidirectional allowlist works; but see C19 for what breaks it.
+
+| `bash scripts/check-no-md-in-docs.sh`
+| PASS (16 `.md` found, all under the allow-listed `docs/wikis/`)
+| The estate rule holds; the pass message under-reports which allowlist matched.
+
+| `bash scripts/check-no-placeholders.sh`, `check-no-vlang.sh`,
+  `scan-dangerous.sh`
+| PASS
+| Those three gates are healthy.
+
+| `bash scripts/check-adoc-renders.sh`
+| ERROR: asciidoctor not installed; "failing closed"
+| Correct behaviour for a missing tool, but it means no `.adoc` gate ran here.
+
+| `node scripts/check-action-pinning.js`
+| `all action refs are pinned` (36 refs resolvable)
+| Pinning *format* is fine. It does not prove the lock resolves (C18).
+
+| `bash scripts/check-lock-sync.sh`
+| FATAL: needs `gawk`
+| Fail-closed, but the toolchain requirement is undocumented (A09).
+
+| `just test`
+| `FileNotFoundError: julia` then exit 1
+| Expected here; the underlying defect is C01, reproduced with a stub below.
+
+| `./scripts/marid check` with a stub `julia` that exits 0
+| printed **“All 13 packages passed!”** for all 13 names including a
+  `packages/ArangoDB` that does not exist
+| The harness asserts a process return code and nothing else; it cannot tell
+  “tests ran and passed” from “julia did nothing”. C01.
+
+| `./scripts/marid check` without `julia`
+| traceback, exit 1
+| No friendly precondition check; the message a maintainer sees is a Python
+  stack trace (fixed as part of C01).
+
+| `gh api .../actions/runs`
+| 2026-10-21: Julia Packages CI, Native Capability Spec, Web CI, CodeQL,
+  Lock Sync Gate, Dogfood Gate **success**; OSSF Scorecard, Hypatia, Secret
+  Scanner, SonarQube, Rust CI, Governance **failure**; Dependabot Auto-Merge
+  failure
+| First hosted evidence since September. The Julia matrix is green; six gates
+  are red from one cause. C18/A06.
+|===
+
+=== Evidence *not* obtained (and why)
+
+`julialang-s3.julialang.org`, `release-assets.githubusercontent.com` and
+`raw.githubusercontent.com` are unreachable from this sandbox, so neither a
+Julia binary, a Juliaup-managed install, nor a GitHub release asset could be
+fetched; `gh`/`api.github.com`, `codeload.github.com`, PyPI and npm *were*
+reachable, and nothing on PyPI or npm ships a Julia runtime. Consequences:
+
+* No package suite, no `examples/http_json` socket suite, no `scripts/marid`
+  Julia paths, and no `capability_cli.sh` run happened here.
+* `just quality`, `just ci`, `just proof-check-*` and `just bench` cannot pass
+  in this sandbox for toolchain reasons, not code reasons.
+* `gawk`, `asciidoctor`, `nickel`, `shellcheck` and `idris2` are also absent, so
+  the gates that need them were not exercised (each fails closed, which is
+  correct, and is itself a finding: nothing aggregates “skipped because the
+  tool is missing” into a single verdict).
+
+== Executive summary
+
+The *program* has improved markedly since September: JSON3 replaced string
+encoding, q-value negotiation is real and tested, a bounded HTTP/1.1 listener
+exists with lifecycle flags, the capability-spec emitter and CLI are the most
+carefully engineered code in the repository, and hosted Julia CI is green. The
+*repository's self-description* has not kept up, and three things are now true
+that were not true in September:
+
+. **The agent-facing truth is false and can no longer be regenerated.**
+   `CLAUDE.md` tells every arriving agent the project is “phase maintenance;
+   maturity production; 100% complete”. `README.adoc`, the evidence ledger and
+   `marid_chora.deed` say incubating/experimental with no accepted release
+   gate. The generator that produced that line requires five `.a2ml` files that
+   no longer exist, and the drift check that is supposed to catch this only
+   tests that the file exists. (C02)
+. **The golden path does not run.** `just test` shells a Python loop naming a
+   package `ArangoDB` that has been `MaridArango` for weeks, so the recipe can
+   never pass; and `just quality` is `fmt-check lint test` where the first two
+   are still template `@echo` stubs. The documented gate
+   (`just test && just quality`) is therefore satisfied by doing nothing. (C01,
+   A03)
+. **Six hosted gates are red for one reason that is not in this repository.**
+   Governance, Hypatia, Secret Scanner, SonarQube and Rust CI all fail at *Set
+   up job* with “Unable to resolve action `actions/checkout@3d3c42e5…`: invalid
+   lockfile pin”; they are exactly the workflows that call
+   `hyperpolymath/standards/...reusable.yml@da2c748`. (C18, A06)
+
+Beyond self-description, the substantive defects are concentrated where the
+code is least exercised: `MaridArango` (an in-memory mock with no HTTP at all,
+whose AQL “cursor” returns every document in every collection),
+`MaridStorage` (a silently harmless “Arango” adapter), `MaridOpenAPI`
+(un-escaped hand-built JSON), `MaridGraphQL` (SDL that cannot validate),
+`MaridRPC` (leaks exception text), `MaridRaft` (a log-truncation rule that is
+unsafe under Raft), and `MaridControl` (`swap_snapshot!` still uncallable, a
+blocking `put!` under a lock). The reference application does not run on the
+only server implementation that exists.
+
+For the maintenance question in the request — corrective vs adaptive vs
+perfective — the single most consequential *adaptive* finding is that
+**HTTP.jl 2.x (a Reseau-backed rewrite published 2026-05-28, now 2.11.1) has
+superseded the 1.x line Marid is pinned to, and Marid's listener reaches into
+1.x internals that 2.x explicitly no longer supports.** That migration is also
+what unlocks SSE, WebSocket and HTTP/2 — three things the charter needs anyway.
+
+== Status of the 2026-09-19 findings (R01–R16)
+
+[cols="1,2,2",options="header"]
+|===
+| ID | Status at `3a417df` | Note
+
+| R01 release audit overclaim
+| *Partly closed.*
+| `docs/audits/{gate1,gate3,gate4,gate5}-*.adoc` carry supersession warnings and
+  `README.adoc` states gates are not accepted. But C02 keeps the “production”
+  claim alive in the one file agents read first, and `docs/wikis/*.md` add a
+  second, drifting copy of the same facts (P12).
+
+| R02 Arango mock / silent fallback
+| *Open, unchanged.*
+| `packages/MaridArango/src/MaridArango.jl`, `packages/MaridStorage/src/MaridStorage.jl`. (C04, C05)
+
+| R03 gateway global verbs
+| *Closed upstream.*
+| Merged as gateway #112 (`c67c743`), which CI pins and asserts. Strict profile
+  is genuine; management-path bypass remains a documented gateway concern.
+
+| R04 gateway proxy surface
+| *Open (upstream).*
+| Nothing in this repo can close it; the pin is now 10 commits behind (A05).
+
+| R05 no HTTP listener
+| *Closed for bounded unary HTTP.*
+| `packages/MaridTransport/src/http.jl` + `MaridCore/ext/MaridHTTPJSONExt.jl`,
+  with a 38-assertion socket suite. Latent issues in C12.
+
+| R06 codec not JSON / ignores q
+| *Closed.*
+| JSON3 encoding, q-value/wildcard/specificity negotiation and its tests are
+  real. Residual nits in P04/P05.
+
+| R07 OpenAPI/proto validation
+| *Open.*
+| `MaridOpenAPI` still interpolates (C07); `emit_proto` still emits undefined
+  message names for primitive inputs (C08 note); `validate_service` still does
+  not check field TypeRefs (C23).
+
+| R08 GraphQL/JSON-RPC/MCP
+| *Open, and one item is a security regression of intent.*
+| C06 (error-text leak), C08 (SDL/introspection).
+
+| R09 router root registration
+| *Closed.*
+| `add_route(table,"GET","/",handler)` works; the example suite tests `/`.
+  Performance and middleware-allocation notes only (P01, P02).
+
+| R10 `swap_snapshot!`
+| *Open, unchanged since the day it was reported.*
+| C03 — including the reason: no test calls it.
+
+| R11 AffineScript / real browsers
+| *Open, and the dependency is still unpublished.*
+| A04.
+
+| R12 CI red / pins
+| *Materially improved, then re-broken by lock drift.*
+| Julia matrix and Web CI are green; lock-schema drift now fails six others
+  (C18). `mise.toml` no longer says `latest` for the runtimes (A09).
+
+| R13 gRPC framing read as protocol support
+| *Open.*
+| Framing helpers remain helpers; the reference app still returns literal
+  placeholder base64 (C15).
+
+| R14 SQLite/DuckDB/etcd/human review
+| *Open.*
+| No new adapters. `MaridControl` grew no backend beyond the in-memory seam.
+
+| R15 own Raft without justification
+| *Open, and now also unsafe.*
+| C13.
+
+| R16 generator stubs / doc drift
+| *Partly closed, with a new silent-success mode.*
+| `generate proto|openapi|graphql` now call real emitters but fall back to an
+  empty descriptor on any failure (C16). `routes` is implemented.
+|===
+
+== Corrective findings — broken now
+
+=== C01 — `just test` cannot pass, and cannot fail (P0, *fixed in this change*)
+
+*Evidence.* `scripts/marid:284` lists `'ArangoDB'`; the directory is
+`packages/MaridArango` (`MaridTransport` CI matrix and `julia-ci.yml` both use
+the correct name). With a stub `julia` that exits 0, the same command prints
+“All 13 packages passed!” — including for the nonexistent directory — so the
+harness measures process status, not test execution. It also runs without
+`--startup-file=no` and without `scripts/bootstrap.jl`, while CI does both, so
+a local green is not the CI green.
+
+*Impact.* The ANCHOR golden path is `just test && just quality`; the first half
+fails on any real Julia, the second half cannot fail (A03). Both halves of the
+documented gate are broken, in opposite directions.
+
+*Disposition.* Replaced with a bash loop that (a) refuses to run without
+`julia`, (b) requires every package directory to exist, (c) bootstraps each
+package exactly as CI does, and (d) verifies each suite's exit status
+individually. Verified in this session with stub `julia` binaries for both the
+all-pass and one-fail paths.
+
+=== C02 — the arrival pack asserts a maturity that no source supports (P0)
+
+*Evidence.* `CLAUDE.md:69`: “phase maintenance; maturity production; 100%
+complete; status active”. `README.adoc:31`: “release gates are not accepted”.
+`docs/audits/evidence-ledger.adoc:8`: “CLADE's `incubating` phase remains
+authoritative”. `.machine_readable/descriptiles/marid_chora.deed`:
+`:phase incubating`, `:version "0.1.0"`. The generator
+(`.machine_readable/arrival-pack/generate.sh`) reads
+`extract.sh`, which hard-requires `descriptiles/{CLADE,ECOSYSTEM,AGENTIC,STATE}.a2ml`
+and `descriptiles/anchors/ANCHOR.a2ml`; none of the five exist (the tree kept a
+`.deed` and an `anchors/README.adoc`). So `just claude-md` exits 2 and the
+committed text cannot be regenerated or verified. `arrival-pack/verify.sh` —
+what `just validate-claude-md` runs — only checks that `CLAUDE.md` exists.
+
+*Impact.* This is the highest-harm defect in the repository: doctrine §9 (wire
+first), §10 (report faithfully), the AFFIRMATION ethos, and the whole reason
+`CLAUDE.md` exists, all fail in the file a new agent is told to read before
+anything else. A model that trusts it will assume a completed production
+framework and act accordingly.
+
+*Disposition.* Not hand-edited here (the region is declared generated, and
+hand-editing it is itself a flagged error). Recommended fix, in order:
+(1) make `extract.sh` read `marid_chora.deed` for identity/phase (it already
+carries `:phase`, `:repo-uuid`, `:languages`, `:license`) and *fail loudly* for
+the fields the deed does not declare rather than defaulting them;
+(2) make `verify.sh` re-render and byte-compare whatever it can, and exit 1
+with “cannot verify: missing inputs” when it cannot — never “OK: present”;
+(3) regenerate. That will flip `just validate-claude-md` to red until (1) lands,
+which is the honest state.
+
+=== C03 — `swap_snapshot!` is still uncallable (P0)
+
+*Evidence.* `packages/MaridControl/src/MaridControl.jl:46`:
+`function swap_snapshot!(cfg::AtomicConfig, next::Snapshot)::Snapshot` whose body
+is `@atomicreplace cfg.current cfg.current => next`, which returns
+`(old = ::Snapshot, success = ::Bool)` in Julia 1.7+. The return annotation
+therefore throws on every call. (The September recon reproduced this; nothing
+has changed and no test calls the function — `packages/MaridControl/test/runtests.jl`
+tests `update_snapshot!` only.)
+
+*Disposition.* Decide the contract, then test it: either
+`swap_snapshot!` returns `Bool`/the previous `Snapshot` (CAS semantics:
+`@atomicreplace` gives you `success`, which is the useful signal), or it returns
+a named tuple and is documented as such. Add the missing test either way.
+
+=== C04 — `MaridArango` is an in-memory mock claiming to be an HTTP client (P0)
+
+*Evidence.* `packages/MaridArango/src/MaridArango.jl` contains no HTTP call,
+no socket, and no URL construction — `using Sockets` at :15 is never used and
+the `endpoint`/`timeout_secs` fields of `ArangoClient` are never read. Every
+operation reads or writes the process-global `MOCK_STORAGE` (:70). Specifically:
+
+* `create_cursor` ignores `query.aql` and `query.bind_vars` entirely and returns
+  *every document in every collection of the database* (:135–160). Any AQL
+  filter silently returns unfiltered data.
+* `begin_transaction`/`commit_transaction`/`abort_transaction` return a
+  synthetic `tx_<ns>` string and `true` (:240–250) — “abort” cannot abort.
+* `_key` defaults to `string(length(collection) + 1)` (:92), which reissues a
+  deleted key.
+* `next_batch` hardcodes a batch size of 100 (:180), ignoring `query.batch_size`.
+* `MOCK_STORAGE` is global and never reset, so test order changes results.
+
+*Disposition.* Two honest options, in the spirit of the plan's E1: rename to
+explicit test doubles (`MaridArango.Mock`) and make the real client a separate,
+disabled seam, or implement the HTTP client (HTTP.jl 2.x already gives you
+client pooling, retries, timeouts). Do not leave a module docstring that says
+“Standalone native Julia HTTP client for ArangoDB 3.12” over code that never
+opens a socket.
+
+=== C05 — `ArangoStorageEngine` silently delegates to memory (P0)
+
+*Evidence.* `packages/MaridStorage/src/MaridStorage.jl:56–76`: every CRUD
+method forwards to `engine.in_memory_fallback`; `endpoint` and `database` are
+never used. The suite named “ArangoStorageEngine Seam”
+(`packages/MaridStorage/test/runtests.jl:33`) therefore asserts that the memory
+dictionary works.
+
+*Impact.* A caller configures an endpoint, gets successful writes, restarts,
+and loses data with no warning — exactly the failure mode the recovery plan's
+E1 forbids (“Never silently fall back to ephemeral memory when the DB is
+unavailable”).
+
+*Disposition.* Either construct it only as an explicit test double (named so),
+or throw on first use with a message naming the unimplemented operation.
+`get_entity` also returns the internal dictionary by reference (P14).
+
+=== C06 — JSON-RPC leaks internal exception text (P0, security)
+
+*Evidence.* `packages/MaridRPC/src/MaridRPC.jl:39`:
+`Dict("code" => -32603, "message" => "Internal error: $(sprint(showerror, e))")`.
+The HTTP slice was carefully changed to redact 500s
+(`MaridCore/ext/MaridHTTPJSONExt.jl:78`: “Never serialize exception messages,
+stacks or input payloads for 500s”); the RPC package does the opposite.
+Additionally: no notification handling (a request without `id` must produce no
+response), no batch support, `-32602` is never used, and
+`RpcResponse.result::Union{Dict,Nothing}` cannot carry a scalar or an array.
+
+*Disposition.* Return `-32603` with a fixed string, log the detail server-side
+keyed by the request id; widen `result` to `Any`/`Union{...,Nothing}`; add the
+notification and batch cases to the suite (they are pure functions, so this is
+cheap and needs no transport).
+
+=== C07 — OpenAPI emitter produces invalid JSON and invalid OpenAPI (P1)
+
+*Evidence.* `packages/MaridOpenAPI/src/MaridOpenAPI.jl:21–40` builds the
+document by string interpolation. A description containing `"` or a newline
+yields invalid JSON; two methods sharing a path emit two `"path"` keys (last
+wins for most parsers, but the document is malformed); there is no
+`components.schemas`, no `requestBody`, no `parameters` for `:id`, and no
+Error/4xx responses. The test only greps for four substrings.
+
+*Disposition.* Emit through JSON3 (`MaridOpenAPI` may take a JSON dependency;
+JSON3 is already in the family), build a `Dict` and serialise once, group
+methods by path, convert `:param` to `{param}` in path templates, and add a
+negative golden test with a quote/newline/emoji in the description. Validate
+the result with an independent OpenAPI validator in CI (spectral or
+`openapi-spec-validator`) — the brief requires exactly that (“Emitted specs
+validate with independent tooling”).
+
+=== C08 — GraphQL SDL cannot validate, and introspection is a substring match (P1)
+
+*Evidence.* `packages/MaridGraphQL/src/MaridGraphQL.jl`: `_type_name` maps
+`Void`, `Bytes`, `UInt32`, `UInt64` to `String` (:19–33) — undefined or lossy;
+`emit_graphql_sdl` emits `type Query` only if some method uses GET (:57), so a
+mutation-only service emits a schema GraphQL rejects (a schema must have a query
+type); object-typed inputs are emitted as single `input:` arguments with no
+`input` types declared; field names and descriptions are not escaped.
+`execute_graphql_query` (:78) is `occursin("__schema", query_str)` and returns
+`types` as a list of strings, which is not the spec's `__Type` shape.
+
+*Disposition.* Emit a minimal valid schema always (`type Query { _empty: Boolean }`
+when nothing else), map `Void` to a real scalar or omit it, and either implement
+introspection from a parsed query (adopting a maintained parser is the plan's
+F1) or stop calling it introspection.
+
+=== C09 — live helpers build JSON/HTML by interpolation (P1, injection-adjacent)
+
+*Evidence.* `packages/MaridLive/src/MaridLive.jl`: `hx_trigger_header` (:36)
+joins `"\"$k\": \"$v\""` — a value containing `"` or a newline produces a
+malformed `HX-Trigger` header, and a CRLF would be a response-splitting attempt
+if nothing downstream rejects it; `datastar_merge_signals` (:100) does the same
+and renders non-strings with Julia syntax (`[:a, :b]`, `Dict(...)`), which is
+not JSON; `turbo_stream` (:72) and `hx_swap_oob` (:22) interpolate `target`/
+`target_id` into an attribute without escaping.
+
+*Disposition.* One JSON encoder for the family (JSON3 for anything server-side;
+a small `escape_attribute` for HTML attributes), reject CR/LF in header values,
+and add tests with quotes, newlines and `<script>` in the values.
+
+=== C10 — readiness is a flag nobody reads; problem-details URIs are wrong (P1)
+
+*Evidence.* `is_ready` is written in `MaridHTTPJSONExt.jl:87–88` and read only
+by tests and `examples/http_json/server.jl`; the request path checks
+`app.is_draining` only (:22). A process that has never become ready, or that
+failed to bind, still answers 200 on application routes. `errors.jl:68–72` builds
+`type` and `instance` as `"https://marid.hyperpolymath.org/errors/$(typeof(err))"`
+and `"/errors/$(typeof(err))"`, i.e. `MaridCore.NotFoundError` — not a stable
+URI and not RFC 9457's “type identifies the problem kind”.
+
+*Disposition.* Check `is_ready` (and answer 503 during startup) before routing;
+give each error struct a `const` slug (`"not-found"`, `"validation"`, …) and use
+it in `type`/`instance`; keep `title` human-readable.
+
+=== C11 — control-plane concurrency and honesty (P1)
+
+*Evidence.* `packages/MaridControl/src/MaridControl.jl:118–124`: `put_key!`
+holds `backend.lock` while calling `put!` on each subscriber channel, which for
+a capacity-0 `Channel` blocks until a receiver arrives — a deadlock whenever a
+subscriber exists and is not already parked (there is no `subscribe` API, so the
+only way to add one is to push onto the public vector). `sync_from_backend!`
+(:150) takes a `Dict` of updates and merges it without consulting
+`node.backend` or `is_connected`; its docstring promises the opposite.
+
+*Disposition.* Use buffered channels with an explicit drop policy (and document
+it), push outside the lock, add a supported `subscribe`/`unsubscribe`; make
+`sync_from_backend!` either read the backend or stop claiming to.
+
+=== C12 — transport internals, unread bodies, and swallowed interrupts (P1)
+
+*Evidence.* `packages/MaridTransport/src/http.jl`:
+
+* `listening_port` (:10) reads `server.listener.server` — undocumented HTTP.jl
+  1.x internals. HTTP.jl 2.0's release notes say undocumented 1.x internals
+  “are no longer supported migration targets”, so this is already a migration
+  blocker (A01), not merely fragile.
+* `_read_request` returns a 400/413 `TransportResponse` without consuming the
+  remaining request body (:27–40); whether the connection is then closed or
+  reused determines whether a keep-alive client can desynchronise. The example
+  suite sends a chunked 413 and then closes the socket, so it does not answer
+  this. Needs an explicit two-request-on-one-connection test.
+* The handler wrapper is a bare `catch` (:76), which also swallows
+  `InterruptException` — a Ctrl-C during a request becomes a 500 response.
+* `HTTP.setheader(stream,"Content-Length" => …)` is set after copying handler
+  headers, so a handler that sets its own length emits two.
+
+*Disposition.* Migrate `listening_port` to a supported API (or return the port
+from `serve_http`, which is where it is known); catch `Exception` and rethrow
+`InterruptException`; add the keep-alive test; de-duplicate headers.
+
+=== C13 — Raft: unsafe truncation, broken commit propagation, phantom export (P0 *if* used)
+
+*Evidence.* `packages/MaridRaft/src/MaridRaft.jl`:
+
+* :155–162 — on a `prev_log_term` mismatch the follower does
+  `resize!(node.log, args.prev_log_index - 1)`. Raft never truncates on a
+  heartbeat mismatch; it replies false and lets the leader decrement
+  `nextIndex`. As written, a leader with a shorter log can delete committed
+  entries from a follower.
+* :204–215 — the commit index only advances inside an AppendEntries whose
+  *prev index matches*. The leader's commit-notification pass (:262) reuses
+  `prev_log_index = new_idx`, so a follower that missed the entry also misses
+  the commit, and nothing retries; `reply.success == false` is ignored.
+* :222 — commits without checking `entry.term == current_term` (the §5.4.2
+  rule), so a leader can commit a previous term's entry by counting replicas.
+* :25 — `export … step_clock!` where no `step_clock!` exists anywhere
+  (`UndefVarError` on use), while the module docstring advertises “randomized
+  election timeouts”.
+* No durable `current_term`/`voted_for` (Raft requires they survive restarts).
+
+*Disposition.* This package is already marked experimental and out of default
+assembly; keep it that way, and either fix the truncation/commit rules first or
+delete the module rather than ship a consensus implementation that can violate
+safety. The cheap, correct fix for the export is to remove it.
+
+=== C14 — `from_dict` is exported and does not exist (P2)
+
+*Evidence.* `packages/MaridIR/src/MaridIR.jl:17`; no definition anywhere.
+August's plan already said “implement or unexport”; nothing changed.
+
+=== C15 — the reference application cannot run on the only server (P1)
+
+*Evidence.* `examples/relationship_explorer/src/server.jl` registers routes
+that return a stream of N items for `GET /api/v1/taxa` (:22–34) and, for
+`POST /api/v1/analysis`, return an open stream and fill it from a detached
+`@async` task (:44–70). `serve_json` requires “exactly one item in a closed
+stream before returning” (`MaridHTTPJSONExt.jl:47–52`), so every one of these
+routes fails; and the background task can push into a stream the transport has
+already closed, raising inside an unmonitored task. The binary export routes
+return the literal strings `BOP001_TAXA_STREAM_PAYLOAD` and
+`CAPNP001_SEGMENT_STREAM_PAYLOAD` (:80, :95) presented as encoded payloads.
+The app also builds its routes by hand while a separate `service_descriptor()`
+describes the same API — the IR-first commitment is violated by construction,
+and the two can drift silently.
+
+*Disposition.* Pick the contract (unary JSON now, streaming later behind a
+transport that supports it), bind routes with `bind_service!` from the one
+descriptor, use `errormonitor(@async …)`, and delete the fake payload routes
+until real fixtures exist.
+
+=== C16 — the generator CLI converts failures into empty artefacts (P1)
+
+*Evidence.* `scripts/marid` `generate` path: `resolve_service` `@warn`s on
+include/eval failure and returns
+`ServiceDescriptor(basename, "1.0.0", [], [])`; the command then prints an
+empty-but-well-formed `.proto`/schema and exits 0. Worse, it searches for a
+descriptor by *calling every zero-argument function* it finds in the module
+(`search_descriptor`), i.e. it executes arbitrary code from the input file while
+looking for a value. `fixtures/capability/service.jl` is a bare expression, so
+today it works by accident of that search.
+
+*Disposition.* Require the file to define a named entry point (e.g. a
+`service()` function or a `const SERVICE = ServiceDescriptor(...)`), fail with
+a non-zero exit when it is absent, and stop invoking arbitrary callables.
+
+=== C17 — `just verify-template` is permanently red (P2)
+
+*Evidence.* It flags the *documentation* of the token convention
+(`build/container/README.adoc:35`, `docs/AI_INSTALLATION_GUIDE.adoc:58`,
+`docs/EXPLAINME.adoc:66`, …) and “Justfile still references 'marid'”, where
+`marid` is the project's actual name. A gate that cannot pass after minting is
+either dead weight or gets bypassed — both outcomes are worse than fixing it.
+
+*Disposition.* Restrict the scan to files that are meant to be instantiated
+(templates and mintable config), skip fenced code and inline literals, and drop
+the project-name rule for a repo whose name is final. Fix it in
+`rsr-template-repo` and re-vendor (doctrine §14).
+
+=== C18 — six hosted gates red from one actions-lock cause (P0 for CI signal)
+
+*Evidence.* Runs on `main`, 2026-10-16 (and Scorecard daily since): Governance,
+Hypatia Security Scan, Secret Scanner, SonarQube and Rust CI all fail with only
+a `Set up job` step, annotated:
+
+----
+Unable to resolve action `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1`:
+invalid lockfile pin. Run `gh actions-lock` to update the lockfile
+----
+
+Facts established here: `3d3c42e5…` *is* `actions/checkout` v7.0.1 (verified via
+the API: tag object and commit both resolve to it, 2026-07-17), and
+`.github/workflows/actions.lock:127` contains a matching
+`'actions/checkout@3d3c42e5…'` entry with `commit: 'sha1-3d3c42e5…'`. The lock
+declares `version: 'v0.0.3'` while the estate's tool is documented in the
+evidence ledger at v0.1.6, whose lock format changed (see standards #1323,
+“close-lock keeps a moved tag as a leaf's ref”). The failing workflows are
+precisely the five that call `hyperpolymath/standards/…reusable.yml@da2c748`
+(`git blame` equivalent: all five have `uses: hyperpolymath/standards/…`), plus
+Sonar; none of the locally-owned workflows fails this way.
+
+*Disposition.* Regenerate the lockfile with the current `gh-actions-lock`
+(needs the release binary and a token — not possible in this sandbox) and bump
+the standards pin (A06). Do not hand-edit the lock.
+
+=== C19 — the canonical session commands dirty the tree and break a gate (P2)
+
+*Evidence.* Running `just verify-substantial` / `just verify-maintenance`
+creates `.session/LAST-CANONICAL-COMMAND.md` and `.session/local-hooks.log` at
+the repository root (observed here; the two files were then removed). `.session/`
+is in neither `.gitignore` nor `.machine_readable/root-allow.txt`, so
+`scripts/check-root-shape.sh` reports it as drift.
+
+*Disposition.* Decide one home for session state (`session/` is allow-listed and
+tracked; `.session/` is the convention the canonical scripts use) and make the
+other a documented exception with a justifying comment — or have the scripts
+write under `session/` and ignore the artefacts. Either way, `.gitignore` needs
+the entry.
+
+=== C20 — browser client: reconnection, retries, and SSE parsing (P1)
+
+*Evidence.* `web/client/src/index.js`: clean EOF breaks the read loop and
+returns without reconnecting (:171) — the September recon's R11 note is still
+true, while the module docstring advertises “SSE reconnection”; errors retry
+every fixed `reconnectIntervalMs` (:218) with no backoff and no retryable-status
+filter, so a 401/404 loops forever; frames are split on `"\n\n"` only, so a
+CRLF stream is never parsed; the resume cursor is sent as the `last_event_id`
+query parameter (:149) rather than the `Last-Event-ID` header the SSE spec
+defines (the server may accept either — but nothing documents which); `id:` is
+parsed into `eventId` and never used; `options.timeoutMs || this.defaultTimeoutMs`
+(:90) makes `timeoutMs: 0` (meaning “no timeout”) unreachable; `subscribe`
+does not check that a `fetch` implementation exists; and the caller's
+`options.signal` listener (:93) is added on every call and never removed.
+
+*Disposition.* Reconnect on clean EOF as well as error, with exponential backoff
+plus jitter and a cap; do not retry 4xx except 408/429; parse `\r\n`; send both
+the header and the parameter (or the header only); use `??` for defaults; store
+and remove the abort listener. All of this is testable in Bun with a
+`ReadableStream` stub — no browser needed.
+
+=== C21 — `docs/status/` is un-instantiated template output (P2)
+
+*Evidence.* `docs/status/TEST-NEEDS.adoc` claims “CRG Grade: C — ACHIEVED
+2026-04-04” with the *template's* module/test counts (3 Idris2 ABI modules, 1
+Zig FFI, “17 required” workflows), none of which describes Marid.
+`docs/status/READINESS.adoc` is dated 2026-09-18, carries `*Current Grade:* X`,
+and points at `.machine_readable/descriptiles/STATE.a2ml` for evidence that no
+longer exists. `just crg-grade` / `just readiness` read `READINESS.md`, which
+this AsciiDoc repository does not have (`rg 'Current Grade' READINESS.md` →
+missing), so both recipes silently return “X”.
+
+*Disposition.* Delete or rewrite both against the evidence ledger (Grade D is
+the defensible claim today: RSR-compliant, per-capability tests, documented
+scope). Keep one place where the grade is stated; do not let `docs/wikis/*.md`
+become a third.
+
+=== C22 — declared-but-unused dependencies (P3)
+
+`packages/MaridStorage/Project.toml` declares `Dates` and `UUIDs`;
+`MaridControl` declares `UUIDs`; `MaridArango` declares `Sockets` — none is
+used (verified by grep across each `src/`). Julia does not warn, so this is
+invisible maintenance noise, and in `MaridArango`'s case the unused `Sockets` is
+the fossil of the HTTP client that was never written.
+
+=== C23 — the IR still does not validate what it describes (P2)
+
+`to_dict` collapses `ListType`/`MapType`/`OptionalType` to the literal string
+`"Complex"` (`MaridIR.jl:154`), so the “golden dictionary” is lossy for three of
+the five `TypeRef` kinds and there is no round-trip (`from_dict`, C14).
+`validate_service` checks duplicate names, method input/output types and route
+shape, but never validates a `FieldDescriptor.type_ref` — a `ListType` of an
+unknown object type passes. Plan item C1.
+
+== Adaptive findings — bring it up to date
+
+=== A01 — HTTP.jl 2.x supersedes the pinned 1.x line (P0 for the roadmap)
+
+[cols="1,3",options="header"]
+|===
+| Fact | Detail
+
+| HTTP.jl v2.0.0 released
+| 2026-05-28; current release v2.11.1 (2026-10-21, i.e. today)
+
+| Nature of the change
+| “a breaking major release and a broad rewrite of the package internals and
+  public API on top of Reseau.jl”
+
+| Consequences that land on Marid
+| `Response.status_code` → `Response.status`; the client layer stack / `pool` /
+  `sslconfig` / `retry_*` APIs are gone (replaced by `HTTP.Client`,
+  `HTTP.Transport`, `retry_if`, `request_timeout`); WebSockets moved under
+  `HTTP.WebSockets`; “undocumented 1.x internals … are no longer supported
+  migration targets”
+
+| What Marid pins
+| `HTTP = "1.10"` in `packages/MaridTransport/Project.toml` and
+  `examples/http_json/Project.toml`; the committed manifest resolves HTTP
+  1.11.0. `listening_port` reads `server.listener.server` — exactly the kind of
+  internal 2.0 drops.
+
+| What 2.x gives you that the charter needs
+| first-class HTTP/2, Server-Sent Events and WebSocket server support
+|===
+
+*Why this is the highest-value adaptive item.* The charter's SSE/WebSocket
+work (MaridLive, MaridTransport) and the Phase-8 gRPC decision (“choose an
+audited HTTP/2 binding or scope to gRPC-Web”) both get materially cheaper on
+2.x, and 1.x is now a line upstream is no longer developing. The migration is
+also small in surface area — one package, one extension, one example — because
+Marid deliberately hides HTTP.jl behind `TransportRequest`/`TransportResponse`.
+
+*Elegant default (named as such, per doctrine §15):* migrate `MaridTransport`
+to HTTP.jl 2.x now, and while there replace `listening_port` with a
+supported way of learning the bound port (or return it from `serve_http`).
+*Departure I would name if you prefer it:* pin `HTTP = "1.11"` exactly, freeze
+the transport, and revisit when SSE/WS work starts — cheaper today, but it
+guarantees a second migration later and blocks Phase 8.
+
+=== A02 — Julia versions: patch level and matrix are behind
+
+Pinned: Julia 1.10.10 (`mise.toml:17`, `.tool-versions`, and three workflow
+steps). Available: 1.10.12 (2026-08-16, the LTS patch line), 1.11.9 (line
+dormant since 2026-02-08), 1.12.7 (2026-08-15), 1.13.2 (2026-10-15).
+
+`julia-ci.yml:27` tests `['1.10', '1.11']` — one line that is patched, one that
+appears abandoned, and *neither* of the two current release series. Every
+package declares `julia = "1.10"`, which correctly admits all of them, so the
+matrix is the only thing excluding 1.12/1.13 from evidence.
+
+*Recommendation.* Matrix `['1.10', '1.13']` (LTS + current), bump the pin to
+1.10.12 (or 1.13.2 and keep 1.10 in the matrix), and add 1.12 if a downstream
+target needs it. Cheap; doubles the platform evidence the brief demands.
+
+=== A03 — the Justfile predates the estate's provisioning standard (P0)
+
+`rsr-template-repo` now declares `mod provision 'build/just/provision.just'` and
+routes `build`, `test`, `bench`, `lint`, `fmt`, `fmt-check`, `run`, `deps`
+through `provision-lib.sh lang-run <verb>`, which detects languages from marker
+files and *fails* when it cannot. Marid's `Justfile` still carries the
+pre-standard bodies: `fmt-check` (:218), `lint` (:227), `deps` (:259),
+`deps-audit` (:269), `fmt` (:208), `readiness` (:162), `test-matrix` (:475) and
+`ci-matrix` (:479) only `@echo` a success message. `quality: fmt-check lint test`
+therefore asserts nothing but `test`, and `ci: deps quality proof-check-all` is
+`deps` (echo) + one real test recipe + the proof checks.
+
+This is the single largest *structural* gap between “the repo has gates” and
+“the gates mean something”. Recommendation: adopt the provision module (it is
+designed to be dropped in), then delete every stub recipe, then re-point
+`quality`/`ci` at the real verbs. Until then, treat every `just` recipe listed
+above as decoration and cite the CI workflow when you need evidence.
+
+=== A04 — the AffineScript dependency still does not exist as published (P0 for Gate 0)
+
+`mise.toml:8–12` states the browser language “is AffineScript (JaffaScript
+face), consumed as `@hyperpolymath/affinescript` under Bun — no OCaml toolchain
+needed (the CLI downloads a pinned, SHA-256-verified native binary)”.
+
+Verified today: `@hyperpolymath/affinescript` → **404 on npm** (only
+`@hyperpolymath/boj-server`, `proven` and `proven-rescript` are published under
+that scope). Upstream `hyperpolymath/affinescript` (pushed 2026-10-17, 57 open
+issues, OCaml) documents installation as `opam install . --deps-only && dune
+build`, describes itself as “v0.2 … early and experimental”, and its
+`packages/affinescript-cli/package.json` is unpublished. `web/client/package.json`
+describes itself as an “AffineScript browser client” but ships plain JavaScript
+with no compiler step; the single `.affine` file
+(`examples/relationship_explorer/frontend/affinescript/app.affine`, 13 lines) is
+never built by anything.
+
+So the *status* is exactly as the evidence ledger says (unproven, Gate 0
+blocker) — the *pinning claim* in `mise.toml` is aspirational and should be
+rewritten to say so, because it currently reads like a solved problem.
+
+*Recommendation.* Take the plan's own escape hatch explicitly (“if unavailable,
+obtain explicit owner approval of a scoped fallback before Gate 4”): either
+(a) adopt the OCaml toolchain in `mise.toml` and prove one `.affine` compiles to
+Wasm in CI, or (b) declare the browser language JavaScript-under-Bun for the
+initial release and descope AffineScript, or (c) block Phase 4 on upstream
+publishing. Decide before more web code is written in the neutral JS shape.
+
+=== A05 — the gateway pin is 10 commits behind upstream (P1)
+
+CI pins `hyperpolymath/http-capability-gateway@c67c743` (the merge of #112,
+2026-09-19) and deliberately asserts that commit still contains the strict-policy
+correction. Upstream `main` is now at `0e75341` (2026-10-20), ten commits later:
+#115 (gate on the DEED grammar), #116–#122 (dependency bumps including Req
+0.7.5), and an actions-lock regeneration. The pin is safe (a commit is a commit)
+but it is also frozen evidence about a moving security boundary; the gateway's
+own last local `mix test --seed 1` result was 15 failures, none of which Marid
+can fix. Recommendation: bump and re-run the capability-spec workflow before
+any sidecar claim, and record the gateway commit in `docs/marid-compatibility.adoc`
+as part of the supported matrix rather than only inside a workflow file.
+
+=== A06 — the standards reusable-workflow pin is six weeks behind, and that is what is red (P0)
+
+Marid calls six reusable workflows from `hyperpolymath/standards` pinned at
+`da2c748a…` (2026-09-10). Standards' `main` is at `01c9b0c9` (2026-10-20) and
+the intervening work is *about this exact machinery* — #1323 “fix(lock):
+close-lock keeps a moved tag as a leaf's ref: when no current tag names the
+pin”, plus the reusable workflows' own `uses: actions/checkout@3d3c42e5…`
+(v7.0.1) which the local lock cannot satisfy (C18).
+
+*Recommendation.* Regenerate the lock with the current tool **and** bump the
+standards pin in the same change, then verify the six workflows go green; do not
+do one without the other, or you will be chasing pins. This is the “solutions at
+source” case: the symptom is in five Marid workflows, the cause is the pairing of
+an old reusable workflow with an old lock schema.
+
+=== A07 — `ci/.gitlab-ci.yml` contradicts the hosting model (P2)
+
+It opens with “Primary CI/CD - GitLab is the source of truth”, caches
+`.cargo/` and `target/` (Rust), and runs floating `aquasec/trivy:latest` and
+`returntocorp/semgrep` images. The repository is GitHub-hosted, has no Rust
+sources (only three tiny helper programs under `scripts/`), and every real gate
+lives in `.github/workflows/`. Either delete it or rewrite it as a mirror that
+runs the same Julia/Bun jobs; a stale “source of truth” claim in a CI file is the
+kind of thing a security reviewer will read as evidence of neglect.
+
+=== A08 — Dependabot watches the ecosystems this repo does not use (P2)
+
+`.github/dependabot.yml` covers `github-actions` (with a careful CodeQL
+exclusion) and Rust (“security only”). It does not cover the two ecosystems that
+actually resolve here: Julia (`Project.toml` compat + committed example
+manifests) and Bun (`web/bun.lock`). Conversely, action bumps are the trigger
+for the lock drift in C18, so the one ecosystem it *does* watch is the one whose
+PRs need a lockfile regeneration to be mergeable — worth encoding in the
+automerge workflow rather than relying on the maintainer to remember.
+
+=== A09 — toolchain pins disagree with each other (P2)
+
+`just` is `"latest"` in `mise.toml`; `AGENTS.md` tells a fresh session to
+“reinstall `just` 1.40.0 (`apt-get install just`)”; the template's provisioning
+module requires `just >= 1.42`; the AFFIRMATION recorded 1.56.0 and this session
+used 1.59.0. Bun is pinned 1.4.2 while 1.4.3 is current; Nickel is required by
+`just claude-md` and `validate-session-contracts.sh` but is not in `mise.toml`
+at all (AGENTS.md tells you to fetch a release binary by hand), and
+`check-lock-sync.sh` additionally needs `gawk`. Recommendation: make
+`mise.toml` the single source (add `nickel`, `asciidoctor`, `gawk`,
+`gh-actions-lock` if it is a release binary), pin `just`, and delete the manual
+install instructions from `AGENTS.md` so there is one story.
+
+== Perfective findings — improvements worth making
+
+* *P01 Router allocation.* `add_route` deep-copies the whole method trie per
+  insert (`_clone_trie`, `router.jl:53`) and `_insert_segments!` clones the param
+  subtree a second time (:72–80), so `bind_service!` over n routes is O(n²) in
+  copies. Build into a private trie and freeze once; then measure (the module
+  docstring's “zero locks / immutable snapshot” claim is architectural — the
+  allocation story is unmeasured).
+* *P02 Middleware.* `apply_middleware` rebuilds the closure chain per request
+  (`app.jl:28`). Freeze it when the app's middleware list is final, or cache per
+  route generation.
+* *P03 Cancellation.* `Stream` checks the context only on entry; a producer
+  blocked in `put!` on a full bounded channel cannot be cancelled, and
+  `Base.Event` is not a task-cancellation primitive (no propagation to blocked
+  `take!`). Document the limit and consider `schedule(task, InterruptException())`
+  or a token the sinks poll.
+* *P04 Negotiation.* `application/json; charset=utf-8` is treated as unusable
+  (`negotiate_content_type` marks any pre-`q` parameter as unusable), returning
+  406 where RFC 9110 says unknown parameters should be ignored for matching.
+  Also: `Vary` lists only `Accept`; if `Content-Type`-based negotiation ever
+  grows, that needs revisiting.
+* *P05 Codec surface.* `MediaType` and `decode_bytes(::Type{String})` are
+  exported but unexercised and semantically odd; no `Content-Encoding` support.
+  Remove or document.
+* *P06 gRPC helpers.* `grpc_status_code` maps unknown symbols to UNKNOWN
+  silently (throw instead); `format_grpc_web_trailers` does not percent-encode
+  `grpc-message` as the spec requires and accepts CRLF. Both are one-line
+  hardening plus tests.
+* *P07 OR-Set semantics.* Liveness is decided by comparing add/remove
+  timestamps (`MaridCRDT.jl:117–124`), not by observed-tag removal, so clock skew
+  can resurrect a removed element; tombstones grow without bound. Either
+  implement OR-Set properly (tag sets, remove preconditions) or rename the type
+  and document the clock assumption.
+* *P08 CRDT evidence.* The suite is examples, not properties: no
+  convergence-under-random-merge-orders, no associativity/commutativity/
+  idempotence over generated states. Charter Phase 6 asks for property tests;
+  `Supposition.jl` or hand-rolled generators are both cheap.
+* *P09 Control race test.* `MaridControl/test/runtests.jl` uses `@async` readers
+  with no yield points inside the read loop, on a single thread, so it cannot
+  observe a torn snapshot. Use `Threads.@spawn` and run the suite with
+  `julia -t 4` in CI to make the claim real.
+* *P10 Benchmarks.* `benches/marid_bench.sh` prints numbers with no baseline and
+  no threshold, so “performance regression detection” (`just bench` description)
+  is not what it does. No p50/p95/p99, allocation counts, slow-consumer or
+  cancellation measurements — all required by brief §8.
+* *P11 Problem details.* Stable `type` URIs, a `title` mapping, `Retry-After`
+  for 503/504, and a `trace_id` extension member would make the errors useful to
+  the browser client, which already has typed subclasses keyed on status.
+* *P12 Documentation substrate.* Three copies of the project's status now exist
+  (`README.adoc`, `docs/wikis/*.md`, `docs/audits/evidence-ledger.adoc`) plus a
+  stale `docs/audits/README.adoc` (“no audit documents exist yet”, above ten of
+  them) and the arrival pack. Pick the ledger as the single source and make the
+  rest link to it.
+* *P13 Test naming.* “MaridArango Full Integration Suite”, “MaridCore Complete
+  Suite”, “Relationship Explorer Integration Suite” are unit tests over
+  in-memory fakes. Rename to `*_unit`, or annotate the testset with an explicit
+  “no external process is contacted” note — the AFFIRMATION doctrine makes this
+  a correctness issue, not a style one.
+* *P14 Storage aliasing.* `get_entity`/`query_entities` return the internal
+  dictionaries by reference and `put_entity!` shallow-copies; a caller can
+  corrupt the store. Copy on the way out (or document the aliasing).
+* *P15 Live helper validation.* `turbo_stream` accepts any `action` string and
+  interpolates it into an attribute; `format_sse_event` does not reject CR/LF in
+  `data` (it splits on `\n` only, so a `\r` survives into the frame). Validate
+  actions against the known set, reject CR.
+* *P16 Repository map scope.* `docs/architecture/REPOSITORY-MAP.adoc` is
+  generated from root entries plus the allowlist's annotations; it lists no
+  second-level directories outside the template's own declared set, so
+  `docs/audits/` (ten documents) does not appear and adding a file to it cannot
+  make the map stale. `README.adoc` calls it “the authoritative map … what every
+  directory is for”, which it is not yet. Either widen the generator to one
+  level of `docs/`, `packages/`, `web/` and `examples/`, or soften the claim.
+* *P17 Maintenance axis is empty.* `docs/governance/maintenance/{corrective,adaptive,perfective}/`
+  exist as one-line stubs with no recorded findings, which is why this report
+  carries its own C/A/P numbering. When these findings become issues, file them
+  under that axis so the estate has one place to read the maintenance backlog.
+
+== Dependency and upstream assessment (the “look at the dependencies first” question)
+
+Short answer: **yes — three dependencies needed looking at before Marid, and two
+of them are the explanation for most of the red signal.**
+
+[cols="2,2,3",options="header"]
+|===
+| Dependency | State today | What it means for Marid
+
+| `hyperpolymath/standards` reusable workflows (pinned `da2c748`, 2026-09-10)
+| HEAD `01c9b0c9` (2026-10-20); the intervening commits are lock-machinery and
+  deed-grammar fixes (#1323 and neighbours)
+| *Cause of C18.* Five of the six red gates are this pin plus an old lock
+  schema. Fix here first; it converts six red check-marks into signal.
+
+| `actions/checkout` / `gh-actions-lock` (lock schema `v0.0.3`)
+| Tool documented at v0.1.6; lock format changed (see #1323)
+| Regenerate, don't hand-edit. Needs the release binary + a token, so it is an
+  owner (or networked CI) action.
+
+| JuliaWeb/HTTP.jl (pinned 1.10, resolved 1.11.0)
+| v2.0.0 (2026-05-28) is a Reseau-backed rewrite; current 2.11.1 (today);
+  1.x internals explicitly unsupported
+| *A01.* Blocks SSE/WS/HTTP-2 work and any hope of upstream fixes. Migrate
+  `MaridTransport` (small surface) before adding live transports.
+
+| Julia runtime (pinned 1.10.10; matrix 1.10/1.11)
+| LTS patch line at 1.10.12; 1.11 dormant since 2026-02-08; current 1.13.2
+| *A02.* Two-line change to the matrix plus a pin bump buys real platform
+  evidence.
+
+| `@hyperpolymath/affinescript`
+| *Not published to npm* (404); upstream OCaml/opam, self-described v0.2
+  experimental
+| *A04.* The Gate 0 blocker is unchanged since September. Decide the fallback
+  explicitly instead of leaving `mise.toml` claiming a solved problem.
+
+| `hyperpolymath/http-capability-gateway` (pinned `c67c743`)
+| 10 commits ahead (#115–#122); its full `mix test` was 15 failures at last
+  local run
+| *A05.* Safe pin, stale evidence. Re-validate at a newer commit before any
+  sidecar acceptance claim; it belongs in the compatibility matrix.
+
+| `hyperpolymath/rsr-template-repo`
+| Now routes build/test/lint/fmt/deps through the provisioning standard
+| *A03.* Marid's Justfile is a pre-standard copy; migrating deletes the
+  no-op gates that make `just quality` meaningless.
+
+| JSON3 1.14.3 / Bun 1.4.3 / Julia stdlibs
+| Current (JSON3 is the latest version; Bun 1.4.3 is one patch ahead of the pin)
+| Fine. No action beyond the Bun patch bump.
+|===
+
+== Recommended sequence
+
+Ordered by “truth gained per unit of risk”, with the elegant default named.
+Findings are grouped on the estate's maintenance axis (corrective C, adaptive A,
+perfective P); `docs/governance/maintenance/` holds the same three directory
+names but no recorded findings yet (P17).
+
+. **Make the repository tell the truth** (C01 ✅ done here, C02, A03's stub
+   recipes). No behaviour changes; deletes the three lies an agent or reviewer
+   meets first. Highest value for a maintenance phase, lowest risk.
+. **Fix the CI signal** (C18 + A06 + A08): regenerate `actions.lock` with the
+   current tool *and* bump the standards pin in one change, then confirm the six
+   workflows go green; add Julia and Bun to Dependabot so the next drift is a
+   PR rather than a silent red check.
+. **Decide the transport future** (A01, A02): HTTP.jl 2.x migration as one
+   scoped task (transport + extension + example + `listening_port`), with the
+   Julia matrix moving to LTS+current. This is the gate for SSE/WS/HTTP-2 and
+   for Phase 8's gRPC decision.
+. **Fix the surfaces that lie to callers** (C06, C07, C08, C09), each with a
+   negative test that would have caught it: redacted RPC errors, escaped
+   OpenAPI JSON with path merging, a GraphQL schema that validates, escaped
+   live-helper JSON/attributes. All are pure functions and can be tested without
+   a network.
+. **Make storage honest** (C04, C05), then real: remove the “Arango client”
+   claim or implement it; make the fallback loud; only then the container tests.
+   Per the plan, this is E, and it is not release-acceptable until a real
+   ArangoDB round-trips.
+. **The reference application** (C15): one descriptor, `bind_service!`, unary
+   JSON, `errormonitor`, no placeholder payloads. This is the smallest thing
+   that makes the framework demonstrable end-to-end.
+. **Then, and only then, the optional phases** (C03, C11, C13, P07–P09): control
+   plane, CRDT properties, Raft. C13's truncation rule means `MaridRaft` should
+   not be wired into anything until it is rewritten or removed.
+. **Housekeeping** (C14, C16, C17, C19, C20, C21, C22, C23, P01–P15) as
+   issue-sized tasks.
+
+Where I depart from the obvious: a reviewer might expect “migrate to HTTP.jl
+2.x” to be a pure dependency bump and put it last. I would put it third, because
+it is the cheapest enabler of three charter features and because the alternative
+(freeze on 1.11) guarantees a second, larger migration later. If you prefer to
+defer it, the *named* departure is “pin HTTP 1.11 exactly and freeze the
+transport until SSE work begins” — that is a defensible choice, but say so in
+`docs/marid-compatibility.adoc` so it is a decision rather than drift.
+
+== What this report does not claim
+
+* No Julia code was executed. C03, C04, C05, C06, C07, C08, C09, C10, C11, C12,
+  C13, C15, C16, C23, P01–P09 are readings of the source, several of them
+  “cannot possibly work as written” rather than “observed broken”. Each cites
+  the line so the claim is checkable in one `julia` session with a runtime.
+* No container, ArangoDB, browser, gateway network path, HTTP/2 conformance or
+  proof-checker run took place here; the toolchains were unavailable (see
+  <<_limits>>).
+* Hosted CI conclusions are the run list of 2026-10-21 on `main`, i.e. the
+  state at `3a417df`. They are not a claim about this branch.
+* The AFFIRMATION's assertion counts (385 assertions) were not re-measured.
+* No licence, trademark or registry-availability audit was performed beyond the
+  single npm lookup recorded in A04.
+
+== Reproduction notes
+
+[source,bash]
+----
+# What ran here (no Julia in this sandbox)
+export PATH="$HOME/.cache/npmg/bin:$PATH"     # just 1.59.0, bun 1.4.3, asciidoctor
+just validate && just validate-repo-map && just validate-coapt
+bash scripts/check-root-shape.sh
+bash scripts/check-no-md-in-docs.sh
+bash scripts/check-no-placeholders.sh
+bash scripts/check-no-vlang.sh
+bash scripts/scan-dangerous.sh
+node scripts/check-action-pinning.js
+( cd web && bun install --frozen-lockfile && bun test )
+
+# Reproduce C01 without a Julia toolchain: a stub that exits 0 is enough to
+# show the harness reports success for a directory that does not exist.
+mkdir -p /tmp/fakebin
+printf '#!/bin/sh\nexit 0\n' > /tmp/fakebin/julia && chmod +x /tmp/fakebin/julia
+PATH=/tmp/fakebin:$PATH ./scripts/marid check
+
+# Once a Julia runtime is available, the unexecuted findings reduce to:
+julia --startup-file=no scripts/bootstrap.jl packages/MaridControl
+julia --startup-file=no --project=packages/MaridControl -e \
+  'using MaridControl; swap_snapshot!(AtomicConfig(), Snapshot(1))'   # C03
+julia --startup-file=no --project=packages/MaridIR -e \
+  'using MaridIR; from_dict'                                          # C14
+julia --startup-file=no --project=packages/MaridRaft -e \
+  'using MaridRaft; step_clock!'                                      # C13
+----
+
+[appendix]
+== Changed in this pass
+
+* `scripts/marid` — the `check` subcommand now (a) refuses to run without
+  `julia` and says so, (b) requires every package directory in its list to
+  exist, (c) bootstraps each package exactly as `julia-ci.yml` does, and
+  (d) verifies each suite's exit status individually. Fixes C01.
+* `scripts/check-no-md-in-docs.sh` — the PASS message now counts the directories
+  it honours, not only the individual file exceptions. Reporting only.
+* This report (and the regenerated `docs/architecture/REPOSITORY-MAP.adoc`).
+
+Everything else in this report is a proposal. No Julia source was modified,
+because no Julia test could be run to prove a change — and an unproven change is
+exactly what the doctrine forbids.

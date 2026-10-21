@@ -47,7 +47,7 @@ for hit in "${HITS[@]}"; do
 done
 
 if [ ${#EXTRAS[@]} -eq 0 ]; then
-    echo "PASS: no .md files under docs/ (${#HITS[@]} total found, ${#ALLOWED[@]} allow-listed)"
+    echo "PASS: no .md files under docs/ (${#HITS[@]} total found; allow-listed: ${#ALLOWED[@]} file(s), ${#ALLOWED_DIRS[@]} dir(s))"
     exit 0
 fi
 
