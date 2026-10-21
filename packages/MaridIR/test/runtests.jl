@@ -79,4 +79,45 @@ using MaridIR
     end
 end
 
+@testset "TypeRef validation, export hygiene and dict fidelity (C14, C23)" begin
+    # Recursive object types are legal and must validate.
+    node = TypeDescriptor("Node", [
+        FieldDescriptor("id", PrimitiveType("String")),
+        FieldDescriptor("children", ListType(ObjectType("Node"))),
+        FieldDescriptor("parent", OptionalType(ObjectType("Node"))),
+        FieldDescriptor("labels", MapType(PrimitiveType("String"), PrimitiveType("String")))
+    ])
+    good = ServiceDescriptor("GraphService", "1.0.0", [node], MethodDescriptor[])
+    @test validate_service(good) == true
+
+    # An unknown object type is now a descriptor error, not an emitter surprise.
+    typo = TypeDescriptor("Node", [FieldDescriptor("x", ObjectType("Nope"))])
+    @test_throws ErrorException validate_service(
+        ServiceDescriptor("S", "1", [typo], MethodDescriptor[]))
+
+    nested_typo = TypeDescriptor("Node", [FieldDescriptor("x", ListType(ObjectType("Nope")))])
+    @test_throws ErrorException validate_service(
+        ServiceDescriptor("S", "1", [nested_typo], MethodDescriptor[]))
+
+    # JSON objects have string keys, so a non-string map key is rejected early.
+    bad_map = TypeDescriptor("M", [FieldDescriptor("x",
+        MapType(PrimitiveType("Int32"), PrimitiveType("String")))])
+    @test_throws ErrorException validate_service(
+        ServiceDescriptor("S", "1", [bad_map], MethodDescriptor[]))
+
+    # Composite types keep their shape instead of collapsing to "Complex".
+    d = to_dict(good)
+    fields = d["types"][1]["fields"]
+    @test fields[1]["type"] == "String"
+    @test fields[2]["type"] == Dict{String, Any}("list" => "Node")
+    @test fields[3]["type"] == Dict{String, Any}("optional" => "Node")
+    @test fields[4]["type"] == Dict{String, Any}("map" => Dict{String, Any}(
+        "key" => "String", "value" => "String"))
+
+    # `from_dict` was exported and never existed. It is gone from the export
+    # list; implement it before re-adding it (`from_dict` round-trip belongs to
+    # the schema-freeze work, not to a name pointing at nothing).
+    @test :from_dict ∉ names(MaridIR)
+end
+
 include("capability.jl")

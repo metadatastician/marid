@@ -14,7 +14,7 @@ module MaridIR
 export FieldDescriptor, TypeDescriptor, MethodDescriptor, ServiceDescriptor,
        StreamingMode, Unary, ServerStreaming, ClientStreaming, BidirectionalStreaming,
        TypeRef, PrimitiveType, ObjectType, ListType, MapType, OptionalType,
-       Annotation, validate_service, to_dict, from_dict, emit_proto,
+       Annotation, validate_service, to_dict, emit_proto,
        emit_capability_spec
 
 @enum StreamingMode begin
@@ -109,6 +109,44 @@ ServiceDescriptor(name::String, version::String, types::Vector{TypeDescriptor}, 
                   description::String="", annotations::Vector{Annotation}=Annotation[]) =
     ServiceDescriptor(name, version, types, methods, description, annotations)
 
+const PRIMITIVE_NAMES = ("String", "Int32", "Int64", "UInt32", "UInt64",
+                         "Float32", "Float64", "Bool", "Bytes", "Void")
+
+"""
+    _validate_type_ref(ref::TypeRef, known::Set{String}, where_::String)
+
+Reject a field's `TypeRef` that names something the descriptor does not define.
+
+`validate_service` previously checked method input/output types but never looked
+inside a field, so `FieldDescriptor("x", ObjectType("Typo"))`, a `ListType` of an
+unknown object, or a `MapType` keyed by a non-`String` all passed validation and
+only failed later, in an emitter (`docs/audits/recon-2026-10-21.adoc`, C23).
+Object names are checked after every type name is collected, so a recursive type
+(`Node` holding `ListType(ObjectType("Node"))`) is legal.
+"""
+function _validate_type_ref(ref::TypeRef, known::Set{String}, where_::String)
+    if ref isa PrimitiveType
+        ref.name in PRIMITIVE_NAMES ||
+            error("Unknown primitive type '$(ref.name)' in $where_")
+    elseif ref isa ObjectType
+        ref.name in known ||
+            error("Unknown type '$(ref.name)' in $where_")
+    elseif ref isa ListType
+        _validate_type_ref(ref.element_type, known, where_)
+    elseif ref isa OptionalType
+        _validate_type_ref(ref.inner_type, known, where_)
+    elseif ref isa MapType
+        # JSON objects have string keys; a map keyed by anything else has no
+        # JSON form, so reject it at the descriptor rather than at the encoder.
+        (ref.key_type isa PrimitiveType && ref.key_type.name == "String") ||
+            error("Map keys must be PrimitiveType(\"String\") in $where_")
+        _validate_type_ref(ref.value_type, known, where_)
+    else
+        error("Unsupported TypeRef kind $(typeof(ref)) in $where_")
+    end
+    return nothing
+end
+
 """
     validate_service(svc::ServiceDescriptor) -> Bool
 
@@ -133,8 +171,16 @@ function validate_service(svc::ServiceDescriptor)::Bool
         end
     end
     
-    primitives = Set{String}(["String", "Int32", "Int64", "UInt32", "UInt64", "Float32", "Float64", "Bool", "Bytes", "Void"])
+    primitives = Set{String}(PRIMITIVE_NAMES)
     all_known = union(type_names, primitives)
+
+    # Field-level TypeRefs, now that every type name is known (a type may refer
+    # to itself, so this cannot live in the loop above).
+    for t in svc.types
+        for f in t.fields
+            _validate_type_ref(f.type_ref, type_names, "field '$(f.name)' of type '$(t.name)'")
+        end
+    end
     
     # Check method signatures
     method_names = Set{String}()
@@ -159,6 +205,28 @@ function validate_service(svc::ServiceDescriptor)::Bool
     return true
 end
 
+# Composite TypeRefs used to collapse to the literal string "Complex", which
+# made the "golden dictionary" lossy for three of the five TypeRef kinds and
+# impossible to round-trip (`docs/audits/recon-2026-10-21.adoc`, C23). A
+# composite now keeps its shape: {"list" => ...}, {"optional" => ...},
+# {"map" => {"key" => ..., "value" => ...}}.
+function _type_ref_to_dict(ref::TypeRef)::Any
+    if ref isa PrimitiveType
+        return ref.name
+    elseif ref isa ObjectType
+        return ref.name
+    elseif ref isa ListType
+        return Dict{String, Any}("list" => _type_ref_to_dict(ref.element_type))
+    elseif ref isa OptionalType
+        return Dict{String, Any}("optional" => _type_ref_to_dict(ref.inner_type))
+    elseif ref isa MapType
+        return Dict{String, Any}("map" => Dict{String, Any}(
+            "key" => _type_ref_to_dict(ref.key_type),
+            "value" => _type_ref_to_dict(ref.value_type)))
+    end
+    return "Unsupported"
+end
+
 # Serialization to pure Dict (golden testable)
 function to_dict(svc::ServiceDescriptor)::Dict{String, Any}
     Dict{String, Any}(
@@ -172,7 +240,7 @@ function to_dict(svc::ServiceDescriptor)::Dict{String, Any}
                 "fields" => [
                     Dict{String, Any}(
                         "name" => f.name,
-                        "type" => f.type_ref isa PrimitiveType ? f.type_ref.name : (f.type_ref isa ObjectType ? f.type_ref.name : "Complex"),
+                        "type" => _type_ref_to_dict(f.type_ref),
                         "nullable" => f.nullable,
                         "description" => f.description
                     ) for f in t.fields
