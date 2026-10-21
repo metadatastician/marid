@@ -40,6 +40,45 @@ From the standards side:
 * The current lock schema version, and whether the reusable workflows now pin
   their own `actions/checkout` differently from Marid's.
 
+== What a 2026-10-21 experiment established
+
+Read this before repeating the work. Attempted from a sandbox with the Marid
+clone, `gh` and the API, but no Go toolchain and no reachable release-asset host
+(so `github/gh-actions-lock` could be neither downloaded nor built).
+
+* The failing pin is the *scanner's own* checkout SHA
+  (`actions/checkout@3d3c42e5…`), reached through
+  `secret-scanner-reusable.yml@da2c748a…` — not a pin written in Marid's file.
+* `.github/workflows/actions.lock` (`v0.0.3`) **does** carry a resolved
+  `dependencies:` entry for that SHA (`ref`, `commit`, `owner_id`, `repo_id`).
+  A pin that is present and still rejected means the lock's *schema* or its
+  completeness is the problem, not that one entry is missing.
+* Three pins the reusables use are absent from `dependencies:` altogether:
+  `github/codeql-action/upload-sarif@cdf488f5…`,
+  `Swatinem/rust-cache@6323deb1…`, and a nested
+  `hyperpolymath/standards@571cc734…` that `rust-ci-reusable.yml` calls at the
+  pinned SHA. An incomplete lock cannot validate.
+* **Disproved:** adding the checkout pin to `secret-scanner.yml`'s per-workflow
+  list does not change the error at all. The change was pushed, CI was observed
+  to fail with the identical message, and the commit was reverted immediately.
+  Whatever association GitHub validates, it is not that list — so hand-editing
+  the lock in that shape is wasted effort regardless of intent.
+* Unrelated but in the same file: `sonarqube.yml` pins
+  `SonarSource/sonarqube-scan-action@v8.3.0` while the lock records
+  `sonarsource/…`. Case mismatch, fixed by the same regeneration. SonarQube is
+  not a required check, so it is not a merge blocker — do not spend the budget
+  there.
+
+*Consequence to plan for:* `scan / gitleaks` is a **required** status check and
+fails on every branch, so no pull request can satisfy the ruleset until the lock
+is regenerated — including the pull request that regenerates it. Either someone
+with admin rights lands the first fix, or the org lifts the requirement while it
+is repaired. Discovering this at merge time is the expensive way.
+
+The hand-edited lock is not an option worth taking: the format is machine
+generated, carries `owner_id`/`repo_id` from the API, and a silently wrong
+security lock is worse than a red check.
+
 == The task
 
 1. *Reproduce locally, without GitHub.* Build a minimal fixture: a workflow that
