@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Ultraplan 04 — AffineScript: publish, build, or descope honestly
+
+== Your single question
+
+Can a third-party repository consume AffineScript today, and if not, what is the
+smallest honest change — to AffineScript, or to the consumers — that stops the
+estate claiming a dependency it cannot install?
+
+== Where you are
+
+`hyperpolymath/affinescript` (OCaml, `dune`; self-described v0.2, early and
+experimental, 57 open issues). One consumer is `metadatastician/marid`, whose
+`mise.toml` claims the browser language is “consumed as
+`@hyperpolymath/affinescript` under Bun — no OCaml toolchain needed (the CLI
+downloads a pinned, SHA-256-verified native binary)”.
+
+== Verified facts (2026-10-21)
+
+* `@hyperpolymath/affinescript` → 404 on the npm registry. The only published
+  packages under that scope are `boj-server`, `proven`, `proven-rescript`.
+* `packages/affinescript-cli/package.json` exists in the repo but is unpublished.
+* The README's install path is `opam install . --deps-only --with-test --yes`
+  then `dune build`, then `dune exec affinescript -- compile … -o hello.wasm`
+  and `--bun-esm` for an ES module.
+* `docs/CAPABILITY-MATRIX.adoc` is declared the single authoritative status
+  document, with a vocabulary (`enforced`, `works`, `partial`,
+  `declared-but-unwired`, `parse-only`, `absent`).
+
+== The task
+
+1. *Answer consumability from outside.* In a clean container, with no prior
+   state: can an unrelated repository compile a `.affine` file to Wasm and to a
+   Bun-importable ES module using only documented, pinned steps? Record every
+   step that needed tribal knowledge.
+2. *If yes:* prepare the distribution the docs promise — and note the
+   conflict this plan has to respect: publishing is a stop condition without
+   owner approval, so acceptance cannot *require* it. Owner approval is an
+   explicit prerequisite. With it, publish a release artefact with a SHA-256 (or
+   an npm package) and add a *consumer* test: a fixture repository (or a job
+   inside affinescript) that installs the artefact and compiles one file.
+   Without it, acceptance is the *prepared and tested* artefact: a reproducible
+   build, a candidate tag, and the consumer test run against the local tarball.
+   Document the pinning either way.
+3. *If no:* write the honest status paragraph for consumers — “not consumable
+   outside the source tree; use the OCaml toolchain or wait” — and open, in
+   `standards`, a one-page consumer guidance note so the estate stops writing
+   aspirational pins.
+4. *Close the loop with the capability matrix.* For each of the features a
+   browser client needs (module imports, records, linear interfaces, `Promise`
+   interop, ES-module output), give its matrix status and the command that
+   demonstrates it.
+
+== Acceptance
+
+* A reproducibility log from a clean container, with versions.
+* Either an installable artefact plus a consumer test, or a dated status note
+  that says plainly it is not installable — no third option.
+* `docs/CAPABILITY-MATRIX.adoc` rows cited for every claim about the language.
+
+== Stop conditions
+
+* Do not publish to npm or opam without explicit owner approval; prepare, test,
+   and stop.
+* Do not invent a version pin. If the commit has no tag, say so.
+* Do not modify a consumer repository in this plan; report what each must change.
+
+== Report format
+
+Consumable: yes/no. The exact steps. What a consumer must pin. What remains
+missing before Marid's browser language commitment is credible.

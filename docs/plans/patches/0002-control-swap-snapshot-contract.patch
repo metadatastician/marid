@@ -1,0 +1,89 @@
+diff --git a/packages/MaridControl/src/MaridControl.jl b/packages/MaridControl/src/MaridControl.jl
+index cc9d157..102ad49 100644
+--- a/packages/MaridControl/src/MaridControl.jl
++++ b/packages/MaridControl/src/MaridControl.jl
+@@ -43,8 +43,29 @@ function get_snapshot(cfg::AtomicConfig)::Snapshot
+     return @atomic cfg.current
+ end
+ 
++"""
++    swap_snapshot!(cfg::AtomicConfig, next::Snapshot) -> Snapshot
++
++Install `next` as the current snapshot and return it, mirroring
++`update_snapshot!` (which also returns the snapshot it installed).
++
++This is an *unconditional* swap: it is the caller's decision to replace the
++configuration, so there is nothing to compare against and nothing that can fail.
++An earlier version used `@atomicreplace cfg.current cfg.current => next`, which
++takes a separate read and replace: a concurrent `update_snapshot!` or another
++swap landing between them makes `success` false and the call throws. The
++setup here ("lock-free swaps with concurrent readers and writers") makes that
++interleaving reachable, so the compare-and-swap was the wrong primitive.
++
++History that keeps this honest: the original `@atomicreplace` version returned a
++`NamedTuple{(:old, :success)}` where `::Snapshot` was annotated, so the function
++threw `MethodError` on every call and nothing noticed
++(`docs/audits/recon-2026-10-21.adoc`, C03). The fix kept the `@atomicreplace`
++shape; a plain atomic store is simpler and cannot fail.
++"""
+ function swap_snapshot!(cfg::AtomicConfig, next::Snapshot)::Snapshot
+-    return @atomicreplace cfg.current cfg.current => next
++    @atomic cfg.current = next
++    return next
+ end
+ 
+ function update_snapshot!(mutator::Function, cfg::AtomicConfig)::Snapshot
+diff --git a/packages/MaridControl/test/runtests.jl b/packages/MaridControl/test/runtests.jl
+index 1d1fc83..4432639 100644
+--- a/packages/MaridControl/test/runtests.jl
++++ b/packages/MaridControl/test/runtests.jl
+@@ -22,6 +22,49 @@ using MaridControl
+         @test s2.data["cluster_name"] == "node-alpha"
+     end
+ 
++    # 1b. swap_snapshot! returns the installed snapshot (C03)
++    @testset "swap_snapshot! installs and returns the new snapshot" begin
++        cfg = AtomicConfig(Snapshot(0, MaridControl.now(MaridControl.UTC), Dict{String, Any}("a" => 1)))
++        next = Snapshot(1, MaridControl.now(MaridControl.UTC), Dict{String, Any}("a" => 2))
++
++        installed = swap_snapshot!(cfg, next)   # was: MethodError on every call
++        @test installed isa Snapshot
++        @test installed === next
++        @test installed.version == 1
++        @test get_snapshot(cfg).version == 1
++        @test get_snapshot(cfg).data["a"] == 2
++
++        # A swap is not a merge: the previous payload does not survive unless the
++        # caller put it there. Documented contract, asserted here.
++        @test !haskey(get_snapshot(cfg).data, "b")
++    end
++
++    # 1c. A swap is unconditional: interleaving with other writers must not make
++    # it throw. The previous compare-and-swap could fail exactly here.
++    @testset "swap_snapshot! cannot fail under concurrent writers" begin
++        cfg = AtomicConfig(Snapshot(0, MaridControl.now(MaridControl.UTC),
++                                    Dict{String, Any}("a" => 0)))
++
++        errors_seen = Base.Threads.Atomic{Int}(0)
++        tasks = [Threads.@spawn begin
++            try
++                for i in 1:50
++                    swap_snapshot!(cfg, Snapshot(i, MaridControl.now(MaridControl.UTC),
++                                                 Dict{String, Any}("a" => i)))
++                    update_snapshot!(d -> d, cfg)
++                    get_snapshot(cfg)
++                end
++            catch
++                Base.Threads.atomic_add!(errors_seen, 1)
++            end
++        end for _ in 1:4]
++        foreach(wait, tasks)
++
++        @test errors_seen[] == 0
++        # Some writer's snapshot is installed and readable.
++        @test get_snapshot(cfg) isa Snapshot
++    end
++
+     # 2. Sequential Log Abstraction
+     @testset "Sequential Log Append & Playback" begin
+         log = SequentialLog()

@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Ultraplan 06 — MaridIR + MaridCore: make the IR the only source, and the core honest
+
+== Your single question
+
+If a service descriptor is the single source of routes, schemas and policy, what
+currently lets a caller (or an emitter) see something the descriptor does not
+say — and what closes that?
+
+== Where you are
+
+`metadatastician/marid`. Read `PROJECT_BRIEF.md` §1–§4, `docs/audits/recon-2026-10-21.adoc`
+(C10, C14, C16, C23, P01–P03), `docs/plans/patches/0003-…` and
+`docs/plans/patches/0008-…`.
+
+== Confirmed state
+
+* `from_dict` was exported and never existed; `to_dict` collapsed `List`/`Map`/
+  `Optional` to the string `"Complex"`, so the golden dictionary was lossy.
+* `validate_service` checked method signatures but never a field's `TypeRef`.
+* `problem_details` built `type`/`instance` from `typeof(err)`
+  (`…/errors/MaridCore.NotFoundError`), and `title` was the type name.
+* `is_ready` is written by the extension and read only by tests: a server that
+  never became ready still answers 200; a server mid-shutdown answers 503 only
+  because `is_draining` is checked.
+* `scripts/marid generate` turns an evaluation failure into an empty descriptor
+  and exit 0, and finds a descriptor by *calling every zero-argument function* in
+  the input file.
+* `add_route` clones the whole method trie per insertion; `apply_middleware`
+  rebuilds its closure chain per request; `Stream` cancellation cannot interrupt
+  a blocked producer.
+
+== The task
+
+1. *Apply patches 0003 and 0008* (IR validation/dict fidelity/export hygiene;
+   stable problem-detail slugs). Run their tests. If a test fails, fix the patch,
+   not the test.
+2. *Finish `from_dict`.* It must invert `to_dict` exactly, including composite
+   types, and round-trip a fixture byte-for-byte. Then re-export it — with the
+   round-trip test as the proof that the name points at something.
+3. *Readiness, properly.* Make the request path answer 503 while
+   `is_ready == false`, and prove with a socket test that a draining server
+   rejects new work while in-flight work finishes. Do not introduce a race where
+   the first request after `serve!` returns races the readiness write — decide the
+   ordering (set ready before accepting, or gate on a `starting` state) and test
+   it.
+4. *Make the CLI's descriptor discovery explicit.* Require the input file to
+   define `service()` or a `const SERVICE::ServiceDescriptor`; fail with exit 2
+   and a message when absent; never call arbitrary functions found in a module.
+   Keep `fixtures/capability/service.jl` working by making it define one of the
+   two forms (and update its callers).
+5. *Performance, measured not asserted:* freeze the trie once per `bind_service!`
+   (or build into a mutable trie and publish an immutable one), cache the
+   middleware chain per app generation, and add a benchmark that reports
+   allocations per route and per dispatch. Replace the docstring's
+   “zero-allocation”-style claims with the measured numbers.
+6. *Cancellation:* document precisely what `Stream` can and cannot do (entry
+   check only), and either add an interrupt path for blocked producers or state
+   the limitation in the module docstring and the ledger.
+
+== Acceptance
+
+* Round-trip proven on *bytes* for a fixture with all five `TypeRef` kinds:
+  `to_dict(from_dict(to_dict(svc)))` re-serialises to the same canonical JSON
+  text as the original. Object equality alone does not establish this — two
+  dictionaries can compare equal and still serialise differently, and the
+  serialised form is what other tools consume.
+* Socket test: not-ready → 503; draining → 503 for new requests; in-flight
+  completes; shutdown flags correct afterwards.
+* `marid generate` exits non-zero, with a diagnostic and empty stdout, for an
+  input file with no descriptor entry point — and a test asserts it.
+* Benchmark output committed for: trie build (n routes), route match, dispatch
+  with 0/1/3 middlewares.
+
+== Stop conditions
+
+* No new IR features (streaming modes beyond unary, new annotations) in this
+  pass. This is the substrate, not new surface.
+* Do not change `to_dict`'s output for primitives; documents and consumers
+  depend on the current shape there.
+* If a performance claim cannot be measured here (no runtime), do not write it.
+
+== Report format
+
+Per task: what changed, the test that proves it, and the measured numbers.
+Explicitly list anything the IR still cannot express.

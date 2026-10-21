@@ -4,7 +4,20 @@
 """
     MaridRPC
 
-JSON-RPC 2.0 and Anthropic Model Context Protocol (MCP) server bindings for Marid.
+JSON-RPC 2.0 bindings for Marid.
+
+Scope and limits, stated up front so they cannot be mistaken for protocol
+support. This is in-process request/response dispatch: one request at a time,
+against a registry of handlers.
+
+What it does: the single request form, with success, method-not-found,
+invalid-request and internal-error outcomes.
+
+What it does NOT do: notification bodies are not handled, batching is not
+implemented, and there is no transport, no MCP lifecycle and no independent
+client interoperating with it.
+`PROJECT_BRIEF.md` §2 and `docs/audits/recon-2026-10-21.adoc` (C06) record that
+gap; do not describe this module as JSON-RPC conformance.
 """
 module MaridRPC
 
@@ -22,25 +35,46 @@ end
 
 struct RpcResponse
     jsonrpc::String
-    result::Union{Dict{String, Any}, Nothing}
+    # `Any`: JSON-RPC results are any JSON value (object, array, string, number,
+    # boolean, null). The previous `Union{Dict{String,Any}, Nothing}` could not
+    # carry a scalar or an array at all, so a conforming handler's result was a
+    # MethodError rather than a response.
+    result::Any
     error::Union{Dict{String, Any}, Nothing}
     id::Union{Int, String, Nothing}
 end
 
-function dispatch_rpc(req::RpcRequest, registry::Dict{String, Function})::RpcResponse
-    req.jsonrpc != "2.0" && return RpcResponse("2.0", nothing, Dict("code" => -32600, "message" => "Invalid Request"), req.id)
-    
+"""
+    dispatch_rpc(req::RpcRequest, registry::Dict{String,<:Function}) -> RpcResponse
+
+Dispatch one JSON-RPC 2.0 request against `registry`.
+
+Internal failures return the fixed message `"Internal error"` and code `-32603`;
+the exception is logged server-side with the request id but is NEVER serialised
+into the response. The HTTP transport in `MaridCore.ext.MaridHTTPJSONExt`
+redacts 500s for the same reason, and leaking handler internals through the RPC
+path would undo that.
+"""
+function dispatch_rpc(req::RpcRequest, registry::Dict{String, <:Function})::RpcResponse
+    req.jsonrpc != "2.0" && return RpcResponse(
+        "2.0", nothing,
+        Dict{String, Any}("code" => -32600, "message" => "Invalid Request"), req.id)
+
     if haskey(registry, req.method)
+        handler = registry[req.method]
         try
-            handler = registry[req.method]
-            res = handler(req.params)
-            return RpcResponse("2.0", res, nothing, req.id)
-        catch e
-            return RpcResponse("2.0", nothing, Dict("code" => -32603, "message" => "Internal error: $(sprint(showerror, e))"), req.id)
+            return RpcResponse("2.0", handler(req.params), nothing, req.id)
+        catch err
+            # Detail goes to the log, keyed by the request id; the client gets a
+            # fixed string. See C06 in docs/audits/recon-2026-10-21.adoc.
+            @error "MaridRPC handler failed" rpc_method = req.method rpc_id = req.id exception = (err, catch_backtrace())
+            return RpcResponse("2.0", nothing,
+                Dict{String, Any}("code" => -32603, "message" => "Internal error"), req.id)
         end
-    else
-        return RpcResponse("2.0", nothing, Dict("code" => -32601, "message" => "Method not found"), req.id)
     end
+
+    return RpcResponse("2.0", nothing,
+        Dict{String, Any}("code" => -32601, "message" => "Method not found"), req.id)
 end
 
 end # module MaridRPC

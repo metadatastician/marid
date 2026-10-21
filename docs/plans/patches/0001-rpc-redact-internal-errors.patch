@@ -1,0 +1,151 @@
+diff --git a/packages/MaridRPC/src/MaridRPC.jl b/packages/MaridRPC/src/MaridRPC.jl
+index 8ca7b16..a285e7c 100644
+--- a/packages/MaridRPC/src/MaridRPC.jl
++++ b/packages/MaridRPC/src/MaridRPC.jl
+@@ -4,7 +4,20 @@
+ """
+     MaridRPC
+ 
+-JSON-RPC 2.0 and Anthropic Model Context Protocol (MCP) server bindings for Marid.
++JSON-RPC 2.0 bindings for Marid.
++
++Scope and limits, stated up front so they cannot be mistaken for protocol
++support. This is in-process request/response dispatch: one request at a time,
++against a registry of handlers.
++
++What it does: the single request form, with success, method-not-found,
++invalid-request and internal-error outcomes.
++
++What it does NOT do: notification bodies are not handled, batching is not
++implemented, and there is no transport, no MCP lifecycle and no independent
++client interoperating with it.
++`PROJECT_BRIEF.md` §2 and `docs/audits/recon-2026-10-21.adoc` (C06) record that
++gap; do not describe this module as JSON-RPC conformance.
+ """
+ module MaridRPC
+ 
+@@ -22,25 +35,46 @@ end
+ 
+ struct RpcResponse
+     jsonrpc::String
+-    result::Union{Dict{String, Any}, Nothing}
++    # `Any`: JSON-RPC results are any JSON value (object, array, string, number,
++    # boolean, null). The previous `Union{Dict{String,Any}, Nothing}` could not
++    # carry a scalar or an array at all, so a conforming handler's result was a
++    # MethodError rather than a response.
++    result::Any
+     error::Union{Dict{String, Any}, Nothing}
+     id::Union{Int, String, Nothing}
+ end
+ 
+-function dispatch_rpc(req::RpcRequest, registry::Dict{String, Function})::RpcResponse
+-    req.jsonrpc != "2.0" && return RpcResponse("2.0", nothing, Dict("code" => -32600, "message" => "Invalid Request"), req.id)
+-    
++"""
++    dispatch_rpc(req::RpcRequest, registry::Dict{String,<:Function}) -> RpcResponse
++
++Dispatch one JSON-RPC 2.0 request against `registry`.
++
++Internal failures return the fixed message `"Internal error"` and code `-32603`;
++the exception is logged server-side with the request id but is NEVER serialised
++into the response. The HTTP transport in `MaridCore.ext.MaridHTTPJSONExt`
++redacts 500s for the same reason, and leaking handler internals through the RPC
++path would undo that.
++"""
++function dispatch_rpc(req::RpcRequest, registry::Dict{String, <:Function})::RpcResponse
++    req.jsonrpc != "2.0" && return RpcResponse(
++        "2.0", nothing,
++        Dict{String, Any}("code" => -32600, "message" => "Invalid Request"), req.id)
++
+     if haskey(registry, req.method)
++        handler = registry[req.method]
+         try
+-            handler = registry[req.method]
+-            res = handler(req.params)
+-            return RpcResponse("2.0", res, nothing, req.id)
+-        catch e
+-            return RpcResponse("2.0", nothing, Dict("code" => -32603, "message" => "Internal error: $(sprint(showerror, e))"), req.id)
++            return RpcResponse("2.0", handler(req.params), nothing, req.id)
++        catch err
++            # Detail goes to the log, keyed by the request id; the client gets a
++            # fixed string. See C06 in docs/audits/recon-2026-10-21.adoc.
++            @error "MaridRPC handler failed" rpc_method = req.method rpc_id = req.id exception = (err, catch_backtrace())
++            return RpcResponse("2.0", nothing,
++                Dict{String, Any}("code" => -32603, "message" => "Internal error"), req.id)
+         end
+-    else
+-        return RpcResponse("2.0", nothing, Dict("code" => -32601, "message" => "Method not found"), req.id)
+     end
++
++    return RpcResponse("2.0", nothing,
++        Dict{String, Any}("code" => -32601, "message" => "Method not found"), req.id)
+ end
+ 
+ end # module MaridRPC
+diff --git a/packages/MaridRPC/test/runtests.jl b/packages/MaridRPC/test/runtests.jl
+index 78126f3..f751bbc 100644
+--- a/packages/MaridRPC/test/runtests.jl
++++ b/packages/MaridRPC/test/runtests.jl
+@@ -8,17 +8,60 @@ using MaridRPC
+     registry = Dict{String, Function}(
+         "ping" => params -> Dict{String, Any}("pong" => true)
+     )
+-    
++
+     # 1. Success
+     req = RpcRequest("2.0", "ping", Dict{String, Any}(), 1)
+     res = dispatch_rpc(req, registry)
+     @test res.id == 1
+     @test res.error === nothing
+     @test res.result["pong"] == true
+-    
++
+     # 2. Method not found
+     bad_req = RpcRequest("2.0", "unknownMethod", Dict{String, Any}(), 2)
+     bad_res = dispatch_rpc(bad_req, registry)
+     @test bad_res.id == 2
+     @test bad_res.error["code"] == -32601
++
++    # 3. Invalid request (wrong jsonrpc version) keeps the id for correlation
++    wrong_version = dispatch_rpc(RpcRequest("1.0", "ping", Dict{String, Any}(), 3), registry)
++    @test wrong_version.error["code"] == -32600
++    @test wrong_version.id == 3
++    @test wrong_version.result === nothing
++end
++
++@testset "Internal errors are redacted (C06)" begin
++    # A marker that reads as sensitive without looking like a real credential:
++    # a literal connection string in a fixture tends to trip secret scanners and
++    # teaches the wrong lesson about what the test is checking.
++    registry = Dict{String, Function}(
++        "boom" => params -> error("SECRET-MARKER-DO-NOT-LEAK db-host-internal")
++    )
++    # The contract has two halves: the client gets a fixed message, and the
++    # detail goes to the log. Assert both, and keep the log record out of the
++    # test output while doing it.
++    local res
++    @test_logs (:error, r"MaridRPC handler failed") begin
++        res = dispatch_rpc(RpcRequest("2.0", "boom", Dict{String, Any}(), 4), registry)
++    end
++    @test res.error["code"] == -32603
++    @test res.error["message"] == "Internal error"
++    # The whole point: nothing about the failure crosses the wire.
++    @test !occursin("SECRET-MARKER", res.error["message"])
++    @test !occursin("db-host-internal", res.error["message"])
++    @test res.id == 4
++end
++
++@testset "Results are any JSON value, not only objects (C06)" begin
++    registry = Dict{String, Function}(
++        "number" => params -> 7,
++        "list" => params -> [1, 2, 3],
++        "text" => params -> "ok",
++        "null" => params -> nothing
++    )
++    @test dispatch_rpc(RpcRequest("2.0", "number", Dict{String, Any}(), 5), registry).result == 7
++    @test dispatch_rpc(RpcRequest("2.0", "list", Dict{String, Any}(), 6), registry).result == [1, 2, 3]
++    @test dispatch_rpc(RpcRequest("2.0", "text", Dict{String, Any}(), 7), registry).result == "ok"
++    res = dispatch_rpc(RpcRequest("2.0", "null", Dict{String, Any}(), 8), registry)
++    @test res.result === nothing
++    @test res.error === nothing
+ end

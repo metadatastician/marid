@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Ultraplan 07 — storage: a real ArangoDB client, or an explicit test double
+
+== Your single question
+
+`MaridArango` claims to be an HTTP client for ArangoDB 3.12 and never opens a
+socket; `MaridStorage`'s Arango adapter pretended to persist. Which of these is
+the honest artefact to ship now, and how is it proven?
+
+== Where you are
+
+`metadatastician/marid`. Read `PROJECT_BRIEF.md` §2 (Storage set) and §8,
+`docs/plans/charter-recovery-and-next-steps.adoc` (work package E),
+`docs/audits/recon-2026-10-21.adoc` (C04, C05, P14), and
+`docs/plans/patches/0006-…`.
+
+== Confirmed state
+
+* `MaridArango`: `using Sockets` is unused, `endpoint`/`timeout_secs` are never
+  read, every operation touches a process-global `MOCK_STORAGE`. `create_cursor`
+  ignores the AQL and bind vars and returns *every document in every collection*.
+  Transactions return `tx_<ns>` and `true`; abort cannot abort. `_key` defaults
+  to `length(collection)+1`, which reissues deleted keys. `next_batch` hardcodes
+  100.
+* `MaridStorage.ArangoStorageEngine` forwarded everything to an in-memory dict.
+  Patch 0006 makes it throw unless `mock=true`; that is a stopgap, not a backend.
+* The tests named “Full Integration Suite” and “ArangoStorageEngine Seam” are
+  in-memory unit tests.
+
+== The task
+
+1. *Decide, in writing, which of two shapes this package ships as:*
+   a. *Real client* — HTTP-based, auth, per-request timeout, bounded retries
+      with idempotency, document/edge CRUD with revision preconditions, AQL
+      cursors with explicit close, batch sizes honoured, stream transactions.
+   b. *Explicit double* — renamed (`MaridArango.Mock` or `TestEngine`), removed
+      from any deployment path, with the real client deferred and documented.
+   The elegant default is (a) for the flagship backend, because the charter makes
+   ArangoDB the flagship and a double cannot satisfy any acceptance criterion.
+   If you choose (b), say so explicitly and name what it costs.
+2. *For (a):* if `docs/plans/ultraplans/05-marid-transport.adoc` has landed, use
+   HTTP.jl 2.x's `HTTP.Client` for pooling/retries rather than hand-rolling them.
+   Never fall back to memory. A missing server is a failure with the endpoint
+   named and the operation named.
+3. *Cursors:* implement `hasMore`/`next`/`delete` faithfully, always close on
+   exhaustion and on error, and test close-on-exception. Batch size comes from
+   the query.
+4. *Revisions:* implement preconditions (`If-Match`) and map 412 to a typed
+   conflict, not a generic error.
+5. *Transactions:* real begin/commit/abort against the stream-transaction API;
+   abort must roll back, proved by a test that writes, aborts, and reads.
+6. *Test against a real container.* Pin the ArangoDB image digest, publish the
+   exact commands, and make the suite *fail* (not skip) when the container is
+   absent — with an explicit `MARID_ARANGO_ALLOW_MOCK=1` escape that is loud and
+   recorded in the ledger. Prove data survives an application restart.
+7. *MaridStorage:* implement the seam over the real client (or over the explicit
+   double), with `Capabilities` declaring what each backend supports, and
+   unsupported operations failing loudly per backend.
+
+== Acceptance
+
+* A container-backed test log naming image digest, ArangoDB version and Julia
+  version; create/read/update-with-revision/conflict/delete/edge/AQL
+  cursor/transaction-rollback all exercised.
+* No code path writes to memory and reports success for an Arango endpoint.
+* The word “integration” appears in a test name only where a real server is
+  contacted.
+
+== Stop conditions
+
+* Do not add SQLite/DuckDB in this pass unless the Arango path is already real;
+  breadth before depth is how the current mock survived.
+* Do not silently skip the container tests in CI.
+* Do not claim persistence acceptance: that needs a review of this evidence.
+
+== Report format
+
+Decision (a or b) with the reason; then capabilities table (supported /
+unsupported / unproven) per operation, each backed by a test name.

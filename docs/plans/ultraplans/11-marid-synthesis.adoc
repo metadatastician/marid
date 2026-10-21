@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Ultraplan 11 — Marid after the workstreams: make the repository tell the truth
+
+== Your single question
+
+With the transport, core/IR, storage, adapters, live/web and distributed
+workstreams landed (or explicitly descoped), what must change so that every
+statement a newcomer, an agent and a reviewer can read about this repository is
+true, checkable, and generated from one source?
+
+== When to run this
+
+Only after ultraplans 05–10 have reported, and ideally after 01–04 (estate CI,
+template, gateway, AffineScript) so the pins you record are current. If a
+workstream has not landed, you record it as *not landed* — you do not skip it.
+
+== Confirmed state to reconcile (2026-10-21)
+
+* `CLAUDE.md` (the arrival pack, generated) says “phase maintenance; maturity
+  production; 100% complete”, while `README.adoc` says release gates are not
+  accepted and `marid_chora.deed` says `:phase incubating`. The generator requires
+  five `.a2ml` files that do not exist, and `verify.sh` only checks presence.
+* `just quality` is `fmt-check lint test` where two of the three were `@echo`
+  stubs; `just ci` chains through the same stubs.
+* `docs/status/TEST-NEEDS.adoc` claims a template's CRG C with the template's
+  test counts; `docs/status/READINESS.adoc` grades X and points at a
+  `.a2ml` that does not exist; `just crg-grade` reads a `READINESS.md` this repo
+  does not have.
+* `docs/audits/README.adoc` says “no audit documents exist yet” above ten of
+  them. `docs/wikis/*.md` is a third copy of the same status facts.
+* `verify-template` is permanently red (template false positives).
+* `ci/.gitlab-ci.yml` says GitLab is the source of truth and caches Rust targets.
+
+== The task
+
+1. *One maturity source.* Make the arrival pack project from `marid_chora.deed`
+   (identity, phase, license) and *fail* on fields the deed does not declare,
+   rather than defaulting them. Regenerate `CLAUDE.md`. Expected outcome: the
+   pack says incubating/experimental and points at the evidence ledger. If that
+   means `just validate-claude-md` goes red until `verify.sh` re-renders and
+   compares, that is correct — fix both in this pass.
+2. *One gate that can fail.* Adopt the provisioning module (or port its verbs),
+   delete every stub recipe, and re-point `quality`/`ci` at real commands. Then
+   prove it by breaking a file on purpose and showing `just quality` fail.
+3. *One status surface.* Pick `docs/audits/evidence-ledger.adoc` as the single
+   status record. Make `docs/status/*` either derive from it or delete them;
+   make `docs/wikis/*.md` link to it instead of restating it; fix
+   `docs/audits/README.adoc`.
+4. *Re-grade honestly.* Set the CRG grade from evidence (D is defensible today:
+   RSR-shaped, per-capability tests, documented scope; C requires dogfooding with
+   no known home-context failures and deep per-directory annotation). Fix
+   `just crg-grade`/`readiness` so they read the file that exists, or make the
+   file match the recipe.
+5. *Reconcile the release matrix.* `docs/marid-compatibility.adoc` must state, per
+   package: supported / unsupported / unproven, with the pinned versions that are
+   actually current after ultraplans 01–05 (HTTP.jl series, Julia versions,
+   gateway commit, AffineScript status). Anything descoped is named as descoped.
+6. *Decide this repository's own housekeeping:* delete or rewrite
+   `ci/.gitlab-ci.yml`; add Julia and Bun to Dependabot; resolve the
+   `.session/` root-shape drift; align `mise.toml` (nickel, asciidoctor, gawk,
+   `just` pin) with what the gates actually need.
+7. *Release review, not release.* Re-run `docs/AUDIT.adoc`'s checklist and write
+   a fresh evidence ledger checkpoint. Do not register packages, do not publish,
+   do not tag.
+
+== Acceptance
+
+* `git grep 'maturity production'` returns nothing; `CLAUDE.md`'s state line
+  matches the deed and the ledger.
+* The generator *fails* when asked for a field the deed does not declare:
+  a fixture deed missing (say) `phase`, with the pack still requesting it,
+  produces a non-zero exit and a diagnostic naming the field. Asserting only
+  the generated text proves the happy path and would let the silent defaulting
+  this task removes come straight back.
+* `just quality` fails when it should (demonstrated) and passes when it should.
+* One status record; every other status document either derives from it or links
+  to it.
+* `docs/marid-compatibility.adoc` names every pin and every gap.
+* The evidence ledger has a 2026-10-21-or-later checkpoint with commands,
+  versions and counts for everything claimed.
+
+== Stop conditions
+
+* Do not soften a claim to avoid work; either the evidence exists or the claim
+  goes.
+* Do not edit the brief's requirements.
+* Do not register, publish, deploy or tag.
+* If a number cannot be produced (no runtime), write “not measured” — never a
+  plausible-looking count.
+
+== Report format
+
+A table: claim → where it was stated → current truth → what now states it → how
+it is checked. Then the list of claims deleted outright because nothing could
+support them.

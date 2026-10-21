@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Ultraplan 02 — the RSR template: gates that can fail, provisioning that works
+
+== Your single question
+
+Which of the template's own gates cannot fail (or cannot pass), and what must
+`rsr-template-repo` ship so that a minted repository's `just test` and
+`just quality` mean something on day one?
+
+== Where you are
+
+`hyperpolymath/rsr-template-repo`. Every repository in the estate is minted from
+it, so every defect here is multiplied by the estate.
+
+== Three reproduced defects (from Marid, 2026-10-21)
+
+. *`just quality` cannot fail.* The template's `fmt-check`, `lint`, `deps` and
+   `deps-audit` bodies were `@echo` success messages in the pre-standard
+   Justfile. The current template routes them through
+   `mod provision 'build/just/provision.just'` → `provision-lib.sh lang-run
+   <verb>`, which fails closed. Any repository minted before that change (Marid
+   is one) still has the stubs, and nothing tells it so.
+. *The arrival pack's verify step cannot fail.* In Marid,
+   `.machine_readable/arrival-pack/verify.sh` prints
+   `OK: CLAUDE.md arrival pack is present.` and exits 0 regardless of content,
+   while `generate.sh` requires five `.a2ml` files that a `.deed`-only repository
+   does not have. Result: a stale, false “maturity production; 100% complete”
+   line survives forever in the file agents read first.
+. *`verify-template` is permanently red on a minted repo.* It flags the
+   documentation that *describes* the `{{TOKEN}}` convention
+   (`build/container/README.adoc`, `docs/AI_INSTALLATION_GUIDE.adoc`,
+   `docs/EXPLAINME.adoc`, a governance template, a runbook) and reports
+   “Justfile still references 'marid'” when `marid` is the project's real name.
+
+== The task
+
+1. *Make `verify.sh` re-render and compare.* It must regenerate the arrival-pack
+   region from the deed/a2ml inputs and byte-compare, and it must exit non-zero
+   with a distinct code when its inputs are missing. “Present” is not
+   “verified”. Same for the coaptation verifier if it has the same shape.
+2. *Support deed-only repositories.* `extract.sh` hard-requires
+   `descriptiles/{CLADE,ECOSYSTEM,AGENTIC,STATE}.a2ml` and `anchors/ANCHOR.a2ml`.
+   A repository whose canonical record is `<name>_chora.deed` must either project
+   from the deed or fail with a message naming exactly which fields it needs.
+   Do not silently default `completeness` or `maturity` — those defaults are how
+   Marid ended up claiming production.
+3. *Fix `verify-template`.* Scan only files meant to be instantiated; skip fenced
+   code, inline literals and prose that documents the convention; and do not
+   require a project to rename itself away from its own repository name.
+4. *Ship a migration recipe* — one `just` verb that a minted repository can run
+   to (a) adopt `provision.just`, (b) delete the stub bodies, (c) re-point
+   `quality`/`ci` at the real verbs, and (d) report what it could not migrate.
+   It must be idempotent and must fail loudly rather than half-migrate.
+5. *Add a minted-repo smoke test to the template's own CI:* mint a throwaway
+   repository from the template in a temp directory, then run `just validate`,
+   `just test`, `just quality` and `just verify-template` inside it. Expect
+   green. `just test` is included deliberately: this plan exists because gates
+   here cannot fail, and a smoke test that skipped the test gate would let the
+   same defect through. Today no such test exists, which is why three of the
+   above shipped.
+
+== Acceptance
+
+* A fresh mint runs `just validate`, `just test`, `just quality`,
+  `just verify-template` green.
+* A *stale* mint (Marid's shape: `.deed` only, stub Justfile) fails with
+  actionable messages and is fixable by the migration verb.
+* `verify.sh` fails when the generated region is edited by hand — prove it by
+  editing a copy and showing the failure.
+* No gate reports success for work it did not do.
+
+== Stop conditions
+
+* Do not edit any minted repository's files from here; ship the recipe and let
+  each repository run it.
+* Do not weaken a gate to make the smoke test pass.
+* Do not push to `main`; open a PR.
+
+== Report format
+
+For each of the five tasks: what the old behaviour was, what it is now, the
+command that proves it, and what it does not cover.

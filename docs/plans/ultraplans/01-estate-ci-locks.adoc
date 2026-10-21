@@ -1,0 +1,132 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Ultraplan 01 — estate CI, action pins and the lockfile schema
+
+== Your single question
+
+Why do six Marid workflows fail at *Set up job* with “invalid lockfile pin”, and
+what is the smallest change to `hyperpolymath/standards` plus Marid's
+`actions.lock` that makes them green *without* dropping the pinning guarantee?
+
+== Where you are
+
+You are working in `hyperpolymath/standards` (the canon) and, once it is
+released, in `metadatastician/marid`. Read `PROJECT_BRIEF.md` and `AGENTS.md` in
+Marid before touching it; read the provisioning/lock ADRs in standards before
+touching those.
+
+== Evidence to gather before proposing anything
+
+From the Marid side (read-only, `gh api`, no clone needed):
+
+* `metadatastician/marid` → Actions → the runs of 2026-10-16. Six workflows fail
+  with only a `Set up job` step. The annotation on one is literally:
+  `Unable to resolve action actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1: invalid lockfile pin. Run gh actions-lock to update the lockfile`.
+* Which workflows fail, and what they have in common: all of them call
+  `hyperpolymath/standards/.github/workflows/*-reusable.yml@da2c748a…`
+  (2026-09-10). The locally-defined workflows are green.
+* `.github/workflows/actions.lock` in Marid: `version: 'v0.0.3'`. It contains
+  `'actions/checkout@3d3c42e5…'` with `commit: 'sha1-3d3c42e5…'`.
+* `3d3c42e5…` is genuinely `actions/checkout` v7.0.1 — verified via the API
+  (tag object and commit both resolve to it). The pin is *correct*; the lock is
+  what is stale.
+* `hyperpolymath/rsr-template-repo` Justfile now declares
+  `mod provision 'build/just/provision.just'` and requires `just >= 1.42`.
+
+From the standards side:
+
+* `git log` on the lock machinery, especially the commit titled
+  “fix(lock): close-lock keeps a moved tag as a leaf's ref: when no current tag
+  names the pin (#1323)”. Read the issue and the diff.
+* The current lock schema version, and whether the reusable workflows now pin
+  their own `actions/checkout` differently from Marid's.
+
+== What a 2026-10-21 experiment established
+
+Read this before repeating the work. Attempted from a sandbox with the Marid
+clone, `gh` and the API, but no Go toolchain and no reachable release-asset host
+(so `github/gh-actions-lock` could be neither downloaded nor built).
+
+* The failing pin is the *scanner's own* checkout SHA
+  (`actions/checkout@3d3c42e5…`), reached through
+  `secret-scanner-reusable.yml@da2c748a…` — not a pin written in Marid's file.
+* `.github/workflows/actions.lock` (`v0.0.3`) **does** carry a resolved
+  `dependencies:` entry for that SHA (`ref`, `commit`, `owner_id`, `repo_id`).
+  A pin that is present and still rejected means the lock's *schema* or its
+  completeness is the problem, not that one entry is missing.
+* Three pins the reusables use are absent from `dependencies:` altogether:
+  `github/codeql-action/upload-sarif@cdf488f5…`,
+  `Swatinem/rust-cache@6323deb1…`, and a nested
+  `hyperpolymath/standards@571cc734…` that `rust-ci-reusable.yml` calls at the
+  pinned SHA. An incomplete lock cannot validate.
+* **Disproved:** adding the checkout pin to `secret-scanner.yml`'s per-workflow
+  list does not change the error at all. The change was pushed, CI was observed
+  to fail with the identical message, and the commit was reverted immediately.
+  Whatever association GitHub validates, it is not that list — so hand-editing
+  the lock in that shape is wasted effort regardless of intent.
+* Unrelated but in the same file: `sonarqube.yml` pins
+  `SonarSource/sonarqube-scan-action@v8.3.0` while the lock records
+  `sonarsource/…`. Case mismatch, fixed by the same regeneration. SonarQube is
+  not a required check, so it is not a merge blocker — do not spend the budget
+  there.
+
+*Consequence to plan for:* `scan / gitleaks` is a **required** status check and
+fails on every branch, so no pull request can satisfy the ruleset until the lock
+is regenerated — including the pull request that regenerates it. Either someone
+with admin rights lands the first fix, or the org lifts the requirement while it
+is repaired. Discovering this at merge time is the expensive way.
+
+The hand-edited lock is not an option worth taking: the format is machine
+generated, carries `owner_id`/`repo_id` from the API, and a silently wrong
+security lock is worse than a red check.
+
+== The task
+
+1. *Reproduce locally, without GitHub.* Build a minimal fixture: a workflow that
+   calls one reusable workflow at `da2c748a`, with a `v0.0.3`-shaped lock. Show
+   the resolver rejecting it, and the resolver accepting the regenerated lock.
+   If the resolver cannot be run offline, say so and stop — do not guess.
+2. *Decide the fix location.* If the fixture reproduces a mismatch between the
+   old reusable workflow and the old lock schema, the fix belongs in standards
+   (make the reusable workflows tolerant of, or explicit about, the lock schema
+   they require) *and* in every consumer (regenerate). If reproduction identifies
+   another cause, revise the fix location before making these changes. Do not
+   “fix” it by
+   removing `actions-lock` from CI.
+3. *Make the failure legible.* A `Set up job` failure names no step and tells a
+   maintainer nothing about which workflow needs which tool version. Note the
+   constraint: the failure occurs during job setup, so a preflight *step inside
+   the reusable workflow* cannot run and cannot print anything — it is never
+   reached. The diagnostic must live outside it: a separate preflight job in the
+   consumer that does not depend on the reusable workflow (or the resolver
+   reporting its requirement before job setup). Prove it by showing the message
+   a maintainer actually sees.
+4. *Publish the consumer procedure* in standards: exact commands to regenerate
+   (`gh actions-lock …`), what to do when a tag has moved, and why the lock is
+   never hand-edited.
+5. *Then, in Marid* (separate PR, after standards is released): regenerate
+   `actions.lock` with the current tool AND bump the standards pin in the same
+   commit. Verify all six workflows go green. If they do not, report which still
+   fail and why — do not push the pin forward incrementally “to see”.
+
+== Acceptance
+
+* A written answer to the single question, with the resolver evidence.
+* A standards PR that makes the failure mode legible and documents the consumer
+  procedure.
+* A Marid PR (after release) with exactly two changes — lock regenerated, pin
+  bumped — and a linked run list showing the six workflows green.
+* No workflow loses SHA pinning; no gate is disabled or set `continue-on-error`.
+
+== Stop conditions
+
+* Do not push to any default branch. Open PRs; the owner merges.
+* Do not hand-edit `actions.lock`.
+* Do not bump the standards pin before the fix is merged there — that just moves
+  the red check elsewhere.
+* If regeneration requires network access you do not have, stop and report the
+  exact command the owner must run.
+
+== Report format
+
+Answer, evidence (commands + output), what you changed, what you verified, what
+you did not, and the owner actions required (merge, release, regenerate).

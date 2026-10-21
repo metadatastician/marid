@@ -1,0 +1,354 @@
+diff --git a/packages/MaridLive/Project.toml b/packages/MaridLive/Project.toml
+index 11692ff..5ea3a41 100644
+--- a/packages/MaridLive/Project.toml
++++ b/packages/MaridLive/Project.toml
+@@ -5,9 +5,11 @@ version = "0.1.0"
+ 
+ [deps]
+ Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
++JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+ 
+ [compat]
+ Dates = "1"
++JSON3 = "1.14"
+ julia = "1.10"
+ 
+ [extras]
+diff --git a/packages/MaridLive/src/MaridLive.jl b/packages/MaridLive/src/MaridLive.jl
+index c907e11..75296d4 100644
+--- a/packages/MaridLive/src/MaridLive.jl
++++ b/packages/MaridLive/src/MaridLive.jl
+@@ -4,69 +4,123 @@
+ """
+     MaridLive
+ 
+-HTML-first live helpers for HTMX, Hotwire Turbo Streams, and Datastar over SSE/WebSocket.
+-Enables rich reactive UIs without mandatory JavaScript framework builds.
++HTML-first live helpers for HTMX, Hotwire Turbo Streams, and Datastar over SSE.
++
++These functions build wire fragments: an attribute, an HTML element, a response
++header, an SSE block. Two rules apply to every one of them:
++
++* Anything that becomes JSON is written by JSON3, never by string interpolation.
++  The previous form interpolated each key and value directly into the JSON text,
++  which produced invalid JSON for any value containing a quote and produced
++  Julia syntax rather than JSON for non-strings
++  (`docs/audits/recon-2026-10-21.adoc`, C09).
++* Anything that becomes an HTML attribute is escaped, and anything that becomes
++  a header value or an SSE field is rejected if it contains CR or LF, so a value
++  cannot break out of its context.
++
++The `html` argument is trusted markup and is deliberately NOT escaped: these
++functions assemble fragments that the caller has already rendered. Escaping it
++would double-encode legitimate markup. If the fragment contains user input, that
++input must be escaped where it is produced, not here.
++
++There is no browser evidence for these helpers: they are string builders with
++unit tests (`PROJECT_BRIEF.md` §2 requires real-browser acceptance for Phase 5).
+ """
+ module MaridLive
+ 
++using JSON3
++
+ export hx_swap_oob, hx_trigger_header, hx_push_url_header, format_htmx_sse,
+        turbo_stream, turbo_append, turbo_replace, turbo_update, turbo_remove,
+        datastar_merge_fragments, datastar_merge_signals, datastar_remove_fragments
+ 
++const _TURBO_ACTIONS = ("append", "prepend", "replace", "update", "remove", "before", "after")
++const _HX_SWAP_MODES = ("outerHTML", "innerHTML", "beforebegin", "afterbegin",
++                        "beforeend", "afterend", "delete", "none")
++
++"Reject CR/LF in a header value rather than emit a response-splitting vector."
++function _header_value(value::AbstractString, field::AbstractString)::String
++    (occursin('\r', value) || occursin('\n', value)) &&
++        throw(ArgumentError("$field must not contain CR or LF"))
++    return String(value)
++end
++
++"""
++Normalise line endings for SSE framing.
++
++A lone CR is a line break in SSE and in HTTP generally, so it becomes LF. The
++previous form deleted it, which silently joined `a\rb` into `ab` and changed
++the payload rather than its framing.
++"""
++_normalise_newlines(text::AbstractString)::String =
++    replace(String(text), "\r\n" => "\n", '\r' => '\n')
++
++"Escape a value for use inside a double-quoted HTML attribute."
++function _attr(value::AbstractString)::String
++    return replace(String(value),
++        '&' => "&amp;", '<' => "&lt;", '>' => "&gt;",
++        '"' => "&quot;", '\'' => "&#39;")
++end
++
+ # 1. HTMX Helpers
+ """
+     hx_swap_oob(html::String, target_id::String; swap_mode::String="outerHTML") -> String
+ 
+-Wraps an HTML fragment with an out-of-band swap attribute for HTMX.
++Wrap an HTML fragment for an out-of-band swap. `target_id` is escaped and
++`swap_mode` must be one of HTMX's swap styles.
+ """
+ function hx_swap_oob(html::String, target_id::String; swap_mode::String="outerHTML")::String
+-    return "<div id=\"$target_id\" hx-swap-oob=\"$swap_mode\">$html</div>"
++    swap_mode in _HX_SWAP_MODES ||
++        throw(ArgumentError("Unknown hx-swap-oob mode: $swap_mode"))
++    return "<div id=\"$(_attr(target_id))\" hx-swap-oob=\"$swap_mode\">$html</div>"
+ end
+ 
+ """
+-    hx_trigger_header(event_name::String; data::Union{Nothing, Dict}=nothing) -> Pair{String, String}
++    hx_trigger_header(event_name::String; data=nothing) -> Pair{String,String}
+ 
+-Produces the `HX-Trigger` response header.
++Build the `HX-Trigger` response header. With `data`, the value is
++`{"<event_name>": {<data>}}` encoded by JSON3.
+ """
+-function hx_trigger_header(event_name::String; data::Union{Nothing, Dict}=nothing)::Pair{String, String}
+-    if data === nothing
+-        return "HX-Trigger" => event_name
+-    else
+-        # Simple JSON encoding for data
+-        kv = join(["\"$k\": \"$v\"" for (k, v) in data], ", ")
+-        return "HX-Trigger" => "{\"$event_name\": {$kv}}"
+-    end
++function hx_trigger_header(event_name::String; data::Union{Nothing, AbstractDict}=nothing)::Pair{String, String}
++    _header_value(event_name, "HX-Trigger event name")
++    data === nothing && return "HX-Trigger" => event_name
++    payload = Dict{String, Any}(String(k) => v for (k, v) in data)
++    return "HX-Trigger" => _header_value(JSON3.write(Dict{String, Any}(event_name => payload)), "HX-Trigger")
+ end
+ 
+ function hx_push_url_header(url::String)::Pair{String, String}
+-    return "HX-Push-Url" => url
++    return "HX-Push-Url" => _header_value(url, "HX-Push-Url")
+ end
+ 
+ """
+     format_htmx_sse(event_name::String, html::String) -> String
+ 
+-Formats an SSE message specifically tailored for HTMX `hx-ext="sse"` listeners.
++Format an SSE message for HTMX's `hx-ext="sse"`.
++
++Line endings are normalised (CRLF and lone CR both become LF) and each line of
++the fragment gets its own `data:` prefix. `event_name` is rejected if it
++contains CR or LF: an event name is an SSE field, and a newline in one lets the
++caller end the field and inject further `event:`/`data:` lines.
+ """
+ function format_htmx_sse(event_name::String, html::String)::String
+-    # Multi-line HTML must have data: prefix on each line
+-    lines = split(html, '\n')
+-    data_lines = join(["data: $line" for line in lines], "\n")
+-    return "event: $event_name\n$data_lines\n\n"
++    safe_event = _header_value(event_name, "SSE event name")
++    data_lines = join(["data: $line" for line in split(_normalise_newlines(html), '\n')], "\n")
++    return "event: $safe_event\n$data_lines\n\n"
+ end
+ 
+ # 2. Hotwire Turbo Streams
+ """
+     turbo_stream(action::String, target::String, html::String="") -> String
+ 
+-Formats a `<turbo-stream>` element.
+-Action can be: append, prepend, replace, update, remove, before, after.
++Format a `<turbo-stream>` element. `action` must be one of Turbo's seven stream
++actions and `target` is escaped.
+ """
+ function turbo_stream(action::String, target::String, html::String="")::String
+-    if action == "remove"
+-        return "<turbo-stream action=\"remove\" target=\"$target\"></turbo-stream>"
+-    else
+-        return "<turbo-stream action=\"$action\" target=\"$target\"><template>$html</template></turbo-stream>"
+-    end
++    action in _TURBO_ACTIONS || throw(ArgumentError("Unknown Turbo Stream action: $action"))
++    escaped = _attr(target)
++    action == "remove" &&
++        return "<turbo-stream action=\"remove\" target=\"$escaped\"></turbo-stream>"
++    return "<turbo-stream action=\"$action\" target=\"$escaped\"><template>$html</template></turbo-stream>"
+ end
+ 
+ turbo_append(target::String, html::String) = turbo_stream("append", target, html)
+@@ -78,18 +132,17 @@ turbo_remove(target::String) = turbo_stream("remove", target, "")
+ """
+     datastar_merge_fragments(html::String; selector::String="", merge_mode::String="morph") -> String
+ 
+-Formats a Datastar `datastar-merge-fragments` SSE block.
++Format a Datastar `datastar-merge-fragments` SSE block. `morph` is the default
++and is therefore omitted, which is what Datastar expects.
+ """
+ function datastar_merge_fragments(html::String; selector::String="", merge_mode::String="morph")::String
++    safe_selector = _header_value(selector, "selector")
++    safe_merge_mode = _header_value(merge_mode, "merge_mode")
+     buf = IOBuffer()
+     println(buf, "event: datastar-merge-fragments")
+-    if !isempty(selector)
+-        println(buf, "data: selector $selector")
+-    end
+-    if merge_mode != "morph"
+-        println(buf, "data: mergeMode $merge_mode")
+-    end
+-    for line in split(html, '\n')
++    isempty(safe_selector) || println(buf, "data: selector $safe_selector")
++    safe_merge_mode == "morph" || println(buf, "data: mergeMode $safe_merge_mode")
++    for line in split(_normalise_newlines(html), '\n')
+         println(buf, "data: fragments $line")
+     end
+     println(buf)
+@@ -97,25 +150,34 @@ function datastar_merge_fragments(html::String; selector::String="", merge_mode:
+ end
+ 
+ """
+-    datastar_merge_signals(signals::Dict{String, Any}; only_if_missing::Bool=false) -> String
++    datastar_merge_signals(signals::AbstractDict; only_if_missing::Bool=false) -> String
+ 
+-Formats a Datastar `datastar-merge-signals` SSE block.
++Format a Datastar `datastar-merge-signals` SSE block. The signal document is
++JSON3-encoded, so nested objects, arrays, booleans, numbers and strings are all
++valid JSON (the previous implementation emitted Julia syntax for non-strings).
+ """
+-function datastar_merge_signals(signals::Dict{String, Any}; only_if_missing::Bool=false)::String
++function datastar_merge_signals(signals::AbstractDict; only_if_missing::Bool=false)::String
+     buf = IOBuffer()
+     println(buf, "event: datastar-merge-signals")
+-    if only_if_missing
+-        println(buf, "data: onlyIfMissing true")
++    only_if_missing && println(buf, "data: onlyIfMissing true")
++    payload = Dict{String, Any}(String(k) => v for (k, v) in signals)
++    for line in split(JSON3.write(payload), '\n')
++        println(buf, "data: signals $line")
+     end
+-    # Simple JSON encoding of signals dictionary
+-    entries = ["\"$k\": $(v isa String ? "\"$v\"" : string(v))" for (k, v) in signals]
+-    json_signals = "{" * join(entries, ", ") * "}"
+-    println(buf, "data: signals $json_signals\n")
++    println(buf)
+     return String(take!(buf))
+ end
+ 
++"""
++    datastar_remove_fragments(selector::String) -> String
++
++Format a Datastar `datastar-remove-fragments` SSE block. `selector` is rejected
++if it contains CR or LF, for the same reason as `format_htmx_sse`: it is
++written into an SSE field line.
++"""
+ function datastar_remove_fragments(selector::String)::String
+-    return "event: datastar-remove-fragments\ndata: selector $selector\n\n"
++    safe_selector = _header_value(selector, "selector")
++    return "event: datastar-remove-fragments\ndata: selector $safe_selector\n\n"
+ end
+ 
+ end # module MaridLive
+diff --git a/packages/MaridLive/test/runtests.jl b/packages/MaridLive/test/runtests.jl
+index 6aaa5e4..42b5832 100644
+--- a/packages/MaridLive/test/runtests.jl
++++ b/packages/MaridLive/test/runtests.jl
+@@ -2,6 +2,7 @@
+ # Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+ 
+ using Test
++using JSON3
+ using MaridLive
+ 
+ @testset "MaridLive Complete Suite" begin
+@@ -12,20 +13,21 @@ using MaridLive
+         @test occursin("id=\"node-42\"", oob)
+         @test occursin("hx-swap-oob=\"outerHTML\"", oob)
+         @test occursin("<span>Updated Node</span>", oob)
+-        
++
+         # Headers
+         h1 = hx_trigger_header("entityCreated")
+         @test h1.first == "HX-Trigger"
+         @test h1.second == "entityCreated"
+-        
++
+         h2 = hx_trigger_header("scoreUpdated", data=Dict("score" => "42"))
+         @test h2.first == "HX-Trigger"
+-        @test occursin("\"score\": \"42\"", h2.second)
+-        
++        parsed = JSON3.read(h2.second)
++        @test parsed[:scoreUpdated][:score] == "42"
++
+         push_h = hx_push_url_header("/taxa/hominini")
+         @test push_h.first == "HX-Push-Url"
+         @test push_h.second == "/taxa/hominini"
+-        
++
+         # SSE Wire Event for HTMX
+         sse = format_htmx_sse("nodeChanged", "<div id=\"node\">Homo</div>")
+         @test startswith(sse, "event: nodeChanged\n")
+@@ -33,15 +35,40 @@ using MaridLive
+         @test endswith(sse, "\n\n")
+     end
+ 
++    # 1b. Values cannot break out of their context (C09)
++    @testset "Escaping and header hygiene" begin
++        # JSON is escaped, not concatenated: a quote in a value used to produce
++        # a malformed HX-Trigger document.
++        h = hx_trigger_header("updated", data=Dict("label" => "He said \"hi\""))
++        @test JSON3.read(h.second)[:updated][:label] == "He said \"hi\""
++
++        # HTML attributes are escaped.
++        oob = hx_swap_oob("<p>x</p>", "a\" onload=\"alert(1)")
++        @test occursin("&quot;", oob)
++        @test !occursin("onload=\"alert(1)\"", oob)
++
++        turbo = turbo_replace("t\" onclick=\"x", "<p>x</p>")
++        @test occursin("&quot;", turbo)
++        @test !occursin("onclick=\"x", turbo)
++
++        # Unknown actions and swap modes are rejected instead of emitted.
++        @test_throws ArgumentError turbo_stream("explode", "t", "<p>x</p>")
++        @test_throws ArgumentError hx_swap_oob("<p>x</p>", "t"; swap_mode="drop table")
++
++        # CR/LF in a header value is refused: that is response splitting.
++        @test_throws ArgumentError hx_trigger_header("ok\r\nX-Evil: 1")
++        @test_throws ArgumentError hx_push_url_header("/a\nb")
++    end
++
+     # 2. Hotwire Turbo Streams
+     @testset "Turbo Streams" begin
+         app = turbo_append("taxa-list", "<li>Pan troglodytes</li>")
+         @test occursin("<turbo-stream action=\"append\" target=\"taxa-list\">", app)
+         @test occursin("<template><li>Pan troglodytes</li></template>", app)
+-        
++
+         rep = turbo_replace("status-box", "<div>Ready</div>")
+         @test occursin("action=\"replace\"", rep)
+-        
++
+         rem = turbo_remove("modal-1")
+         @test rem == "<turbo-stream action=\"remove\" target=\"modal-1\"></turbo-stream>"
+     end
+@@ -54,13 +81,24 @@ using MaridLive
+         @test occursin("data: selector #msg", frag)
+         @test occursin("data: mergeMode upsertAttributes", frag)
+         @test occursin("data: fragments <p id=\"msg\">Calculated</p>", frag)
+-        
+-        # Signals merge
++        # Exactly one trailing blank line, i.e. the block ends "\n\n".
++        @test endswith(frag, "\n\n")
++        @test !endswith(frag, "\n\n\n")
++
++        # Signals merge: numbers and booleans must be JSON, not Julia syntax.
+         sig = datastar_merge_signals(Dict{String, Any}("parsimony_score" => 3.5, "running" => true))
+         @test occursin("event: datastar-merge-signals", sig)
+-        @test occursin("\"parsimony_score\": 3.5", sig)
+-        @test occursin("\"running\": true", sig)
+-        
++        signals_line = first(filter(l -> startswith(l, "data: signals "), split(sig, '\n')))
++        signals = JSON3.read(replace(signals_line, "data: signals " => ""))
++        @test signals[:parsimony_score] == 3.5
++        @test signals[:running] === true
++        @test endswith(sig, "\n\n")
++
++        # Nested structures are valid JSON too (the old interpolation was not).
++        nested = datastar_merge_signals(Dict{String, Any}("peers" => ["a", "b"], "meta" => Dict("n" => 2)))
++        nested_line = first(filter(l -> startswith(l, "data: signals "), split(nested, '\n')))
++        @test JSON3.read(replace(nested_line, "data: signals " => ""))[:peers] == ["a", "b"]
++
+         # Remove fragment
+         rem_frag = datastar_remove_fragments("#stale-node")
+         @test occursin("event: datastar-remove-fragments", rem_frag)

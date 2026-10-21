@@ -4,15 +4,23 @@
 """
     MaridStorage
 
-Pluggable persistence seam for Marid. Provides in-memory, SQLite, and DuckDB engines,
-with ArangoDB integrated via Julia package extensions.
+Persistence seam for Marid.
+
+What exists: `InMemoryEngine`, a test double. That is all.
+
+What does NOT exist, despite earlier claims in this docstring and in the package
+README: SQLite, DuckDB, and a real ArangoDB backend. `ArangoStorageEngine` is a
+seam with no client behind it and now refuses to run unless explicitly marked as
+a mock (recon-2026-10-21, C05). `PROJECT_BRIEF.md` §2 requires the memory engine
+to be described as test storage and requires real container-backed tests before
+any backend is called supported.
 """
 module MaridStorage
 
 using Dates
 using UUIDs
 
-export StorageEngine, InMemoryEngine, ArangoStorageEngine,
+export StorageEngine, InMemoryEngine, ArangoStorageEngine, is_mock,
        put_entity!, get_entity, delete_entity!, query_entities
 
 abstract type StorageEngine end
@@ -25,14 +33,27 @@ InMemoryEngine() = InMemoryEngine(Dict{String, Dict{String, Any}}())
 
 function put_entity!(engine::InMemoryEngine, collection::String, id::String, data::Dict{String, Any})
     key = "$collection/$id"
-    engine.records[key] = copy(data)
+    # `deepcopy` on write AND on read. A shallow `copy` copies only the top
+    # level: a caller who kept a reference to a nested Dict or Vector could
+    # mutate the stored record after the write, and a caller who received one
+    # could mutate it without going through put_entity!. Nested values are the
+    # common case here (a clade's children, a node's tags), so the shallow
+    # version did not deliver the isolation the comment claimed
+    # (recon-2026-10-21, P14).
+    engine.records[key] = deepcopy(data)
     engine.records[key]["_id"] = key
-    return engine.records[key]
+    # Return a copy, not the stored dictionary: returning the internal object
+    # would hand every caller a writable handle on the engine's state.
+    return deepcopy(engine.records[key])
 end
 
 function get_entity(engine::InMemoryEngine, collection::String, id::String)
     key = "$collection/$id"
-    return get(engine.records, key, nothing)
+    record = get(engine.records, key, nothing)
+    # Deep copy on read: handing out the stored dictionary let a caller mutate
+    # the store without going through put_entity!, and made "engine" semantics a
+    # lie (recon-2026-10-21, P14). Shallow `copy` only protected the top level.
+    return record === nothing ? nothing : deepcopy(record)
 end
 
 function delete_entity!(engine::InMemoryEngine, collection::String, id::String)
@@ -45,35 +66,83 @@ function query_entities(engine::InMemoryEngine, collection::String; filter_fn::F
     results = Dict{String, Any}[]
     for (k, v) in engine.records
         if startswith(k, prefix) && filter_fn(v)
-            push!(results, v)
+            push!(results, deepcopy(v))
         end
     end
     return results
 end
 
-# ArangoDB Storage Engine Seam Adapter
+"""
+    ArangoStorageEngine(endpoint, database; mock=false)
+
+ArangoDB storage seam.
+
+There is NO ArangoDB client behind this type yet: `packages/MaridArango` is an
+in-memory double (recon-2026-10-21, C04) and this adapter used to forward every
+operation to `in_memory_fallback` silently. That is the worst possible failure
+mode for a persistence seam — a caller configures a real endpoint, every write
+succeeds, and the data is gone after a restart with no warning anywhere.
+
+So the fallback is now opt-in and loud:
+
+* `mock=false` (default): every operation throws `ArgumentError` naming itself as
+  unimplemented. A deployment that reaches this code fails at the first write
+  instead of losing data quietly.
+* `mock=true`: explicit test double. Only tests may construct it this way, and
+  `is_mock(engine)` lets a test assert that it did.
+
+`PROJECT_BRIEF.md` §2 and the recovery plan's work package E require a real
+HTTP client, revision preconditions, cursors and transactions before this type
+can be called an ArangoDB backend.
+"""
 struct ArangoStorageEngine <: StorageEngine
     endpoint::String
     database::String
     in_memory_fallback::InMemoryEngine
+    mock::Bool
 end
 
-ArangoStorageEngine(endpoint::String="http://127.0.0.1:8529", database::String="_system") =
-    ArangoStorageEngine(endpoint, database, InMemoryEngine())
+ArangoStorageEngine(endpoint::String="http://127.0.0.1:8529", database::String="_system"; mock::Bool=false) =
+    ArangoStorageEngine(endpoint, database, InMemoryEngine(), mock)
+
+"""
+    is_mock(engine::StorageEngine) -> Bool
+
+True for an engine that exists only to stand in for a real backend.
+
+Defined on the abstract type so a caller holding a generic `StorageEngine` can
+ask the question without dispatching on a concrete type and hitting a
+`MethodError`. `InMemoryEngine` is documented as test storage, so it answers
+`true`; `ArangoStorageEngine` answers its `mock` flag, because a
+non-mock Arango engine is intended (though not yet able) to be real.
+"""
+is_mock(::StorageEngine)::Bool = true
+is_mock(engine::ArangoStorageEngine)::Bool = engine.mock
+
+function _require_mock(engine::ArangoStorageEngine, operation::AbstractString)
+    engine.mock || throw(ArgumentError(
+        "ArangoStorageEngine.$operation is not implemented: no ArangoDB client is wired into MaridStorage. " *
+        "Construct the engine with mock=true only in tests. See docs/audits/recon-2026-10-21.adoc (C05)."))
+    return nothing
+end
 
 function put_entity!(engine::ArangoStorageEngine, collection::String, id::String, data::Dict{String, Any})
+    _require_mock(engine, "put_entity!")
     put_entity!(engine.in_memory_fallback, collection, id, data)
 end
 
 function get_entity(engine::ArangoStorageEngine, collection::String, id::String)
+    _require_mock(engine, "get_entity")
     get_entity(engine.in_memory_fallback, collection, id)
 end
 
 function delete_entity!(engine::ArangoStorageEngine, collection::String, id::String)
+    _require_mock(engine, "delete_entity!")
     delete_entity!(engine.in_memory_fallback, collection, id)
 end
 
 function query_entities(engine::ArangoStorageEngine, collection::String; filter_fn::Function = x -> true)
+    _require_mock(engine, "query_entities")
     query_entities(engine.in_memory_fallback, collection; filter_fn=filter_fn)
 end
 

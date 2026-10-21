@@ -43,8 +43,29 @@ function get_snapshot(cfg::AtomicConfig)::Snapshot
     return @atomic cfg.current
 end
 
+"""
+    swap_snapshot!(cfg::AtomicConfig, next::Snapshot) -> Snapshot
+
+Install `next` as the current snapshot and return it, mirroring
+`update_snapshot!` (which also returns the snapshot it installed).
+
+This is an *unconditional* swap: it is the caller's decision to replace the
+configuration, so there is nothing to compare against and nothing that can fail.
+An earlier version used `@atomicreplace cfg.current cfg.current => next`, which
+takes a separate read and replace: a concurrent `update_snapshot!` or another
+swap landing between them makes `success` false and the call throws. The
+setup here ("lock-free swaps with concurrent readers and writers") makes that
+interleaving reachable, so the compare-and-swap was the wrong primitive.
+
+History that keeps this honest: the original `@atomicreplace` version returned a
+`NamedTuple{(:old, :success)}` where `::Snapshot` was annotated, so the function
+threw `MethodError` on every call and nothing noticed
+(`docs/audits/recon-2026-10-21.adoc`, C03). The fix kept the `@atomicreplace`
+shape; a plain atomic store is simpler and cannot fail.
+"""
 function swap_snapshot!(cfg::AtomicConfig, next::Snapshot)::Snapshot
-    return @atomicreplace cfg.current cfg.current => next
+    @atomic cfg.current = next
+    return next
 end
 
 function update_snapshot!(mutator::Function, cfg::AtomicConfig)::Snapshot

@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Ultraplan 05 — MaridTransport: execute the HTTP.jl 2.x migration
+
+== Your single question
+
+Can `MaridTransport` move to HTTP.jl 2.x without changing a single line of
+`MaridCore` or its extension — and if not, what leaked through the seam?
+
+== Where you are
+
+`metadatastician/marid`, branch `arena/a2a92b6f-marid` or a branch from `main`.
+Read, in this order: `PROJECT_BRIEF.md` §1–§2, `AGENTS.md`,
+`docs/plans/httpjl-2-migration.adoc` (the plan you are executing),
+`docs/audits/recon-2026-10-21.adoc` (A01, C12), then the three files the plan
+names.
+
+== Facts you must start from
+
+* `packages/MaridTransport/Project.toml` and `examples/http_json/Project.toml`
+  pin `HTTP = "1.10"`; the committed example manifest resolves HTTP 1.11.0.
+* HTTP.jl v2.0.0 (2026-05-28) is a Reseau-backed rewrite; 2.11.1 is current.
+  2.x removes the 1.x internals, *prefers* `status` over `status_code`
+  (`resp.status_code` survives as a compatibility alias — prefer the new name,
+  do not describe the old one as deleted), replaces the client layer stack with
+  `HTTP.Client`/`HTTP.Transport`, and moves WebSockets under
+  `HTTP.WebSockets`.
+* `listening_port` reads `server.listener.server` — a 1.x internal.
+* The acceptance test is `examples/http_json/test/runtests.jl` (38 assertions,
+  real sockets, curl and a raw chunked request). It must pass *unedited* except
+  where a real behaviour differs, and any such edit needs a written reason.
+
+== The task
+
+1. *Phase 0 first, and stop if it cannot be done.* Execute the spike in the plan:
+   answer Q1–Q5 by running code on 2.11 and write
+   `docs/audits/httpjl-2-spike.adoc` with the printed `dump(server)` and the
+   exact versions. Q2 (supported way to learn the bound port) and Q4 (what
+   happens to the connection after an unread body) are the two the release notes
+   do not answer. Do not proceed on inference.
+2. *Phase 1 on 1.x:* introduce `TransportServer` (handle + resolved port),
+   rethrow `InterruptException` instead of converting it to 500, and set
+   `Content-Length` exactly once. Suite green on 1.x. Commit.
+3. *Phase 2:* bump to `HTTP = "2.11"`, port `serve_http` to the 2.x server API,
+   port the example's client calls, regenerate the committed manifest with
+   `scripts/bootstrap.jl` (never hand-edit), and keep `MaridCore` untouched.
+4. *Phase 3:* add the six behaviour tests from the plan — keep-alive after a 413,
+   truncated chunked body, handler-set `Content-Length`, Ctrl-C during a slow
+   handler, `port=0` reports the bound port, client disconnect mid-response.
+5. *Phase 4:* matrix to Julia `['1.10','1.13']`, a job that re-runs the example
+   suite after `Pkg.update()` within the 2.11 series, and an evidence-ledger
+   checkpoint with commands, versions and counts.
+
+== Acceptance
+
+* `git grep 'listener.server'` and `git grep 'HTTP = "1'` both return nothing.
+* Example suite green unedited + six new tests, on Julia 1.10 and 1.13.
+* `just test` green; `scripts/check-packages-precompile.jl` green in a clean depot.
+* Ledger checkpoint appended; `docs/marid-compatibility.adoc` updated; no claim
+  about SSE, WebSocket or HTTP/2 support.
+
+== Stop conditions
+
+* Stop after Phase 0 if the spike cannot run (no Julia runtime). Report instead
+  of guessing — an unexecuted migration is not a migration.
+* Do not add SSE/WS/HTTP-2 features here; this plan buys the foundation.
+* Do not change `MaridCore`/`MaridHTTPJSONExt` to make the port easier. If they
+  must change, write a seam-leak finding first, then propose it separately.
+
+== Report format
+
+Spike answers → per-phase diff summary → test counts with versions → what the
+next feature (SSE) can now assume, and what it still cannot.

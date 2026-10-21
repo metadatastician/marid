@@ -1,0 +1,169 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= Reviewable patches for the 2026-10-21 recon
+
+Eight independent patches, one per package, fixing the corrective findings in
+link:../../audits/recon-2026-10-21.adoc[the recon report]. Each is small enough
+to review on its own, touches exactly one package (source + its test suite, plus
+`Project.toml` where a dependency is added), and adds the test that would have
+caught the defect.
+
+[IMPORTANT]
+====
+*Status: applied and verified.* These patches were written where no Julia runtime
+could be obtained, and the first version of this file said exactly that: unrun,
+and therefore unproven. That is no longer the state.
+
+They were then applied one per commit on this branch and executed by
+`julia-ci.yml` (13 packages × Julia 1.10/1.11, plus `examples/http_json` and the
+CLI job): *28/28 jobs green*. That run found two defects that reading had not —
+`JSON3.pretty` writes to `stdout` and returns `nothing`, so the OpenAPI emitter
+threw on every call; and Julia interpolates `$` inside a docstring, so quoting
+`"\"$k\": \"$v\""` in MaridLive's module docstring broke precompilation. Both
+are fixed. A review round then found more, listed under "Review corrections"
+below.
+
+The files here are *regenerated* from the landed commits:
+
+[source,bash]
+----
+git diff --binary 3a417df HEAD -- packages/<Package> > docs/plans/patches/<name>.patch
+----
+
+so applying all eight, in order, to a clean `3a417df` reproduces `packages/`
+exactly. That was checked by diffing the result against the branch, not assumed.
+They are kept as reviewable units and as a record of what changed and why; the
+commits are the source of truth.
+====
+
+== Review corrections (second round)
+
+The applied patches drew a review, and the findings were acted on rather than
+resolved away. The ones with teeth:
+
+* `copy` is shallow — nested `Dict`/`Vector` values were still shared between
+  store and caller on both read and write, and `put_entity!` returned the
+  internal dictionary. Now `deepcopy` both ways, returning a copy, with tests
+  for all four mutation paths.
+* GraphQL declared object types as `scalar` (one namespace, so a collision),
+  emitted a fieldless `input Entity` alongside `type Entity`, and produced
+  `Void!` for a scalar documented as always null. Inputs are now
+  `<Name>Input` with real fields and transitive closure.
+* SSE helpers interpolated `event_name` and `selector` into field lines, which
+  is event injection; and a lone CR was deleted rather than treated as a line
+  break, joining `a\rb` into `ab`.
+* `swap_snapshot!` used compare-and-swap in a design that invites concurrent
+  writers, so it could throw. An unconditional atomic store cannot.
+* `HTTP = "2.11"` is caret semantics (`>=2.11.0, <3.0.0`) and does not pin the
+  minor it claims to; the plan now says `~2.11`.
+
+Eight of the findings were rejected, with reasons recorded on the threads: they
+asked for `MPL-2.0` on `.adoc` files, whereas `REUSE.toml` maps documentation to
+`CC-BY-SA-4.0` and that is the repository's own rule.
+
+== Apply order and what each fixes
+
+Run from the repository root. The order is dependency-free; 0001 first is
+deliberate (security), 0003 next (it changes what the other emitters may assume).
+
+[source,bash]
+----
+git switch -c fix/recon-2026-10-21
+for p in docs/plans/patches/*.patch; do git apply "$p"; done
+# per package, as CI does it:
+julia --startup-file=no scripts/bootstrap.jl packages/MaridRPC
+julia --startup-file=no --project=packages/MaridRPC packages/MaridRPC/test/runtests.jl
+just test
+----
+
+[cols="1,3,3",options="header"]
+|===
+| Patch | Fixes | Behaviour change callers will notice
+
+| `0001-rpc-redact-internal-errors`
+| C06
+| `-32603` now carries `"Internal error"` instead of the exception text (detail
+  goes to `@error`, keyed by request id); `RpcResponse.result` is `Any`, so
+  scalar/array/null results no longer raise a `MethodError`; the dispatcher
+  accepts any `Dict{String,<:Function}`.
+
+| `0002-control-swap-snapshot-contract`
+| C03
+| `swap_snapshot!` returns the installed `Snapshot` instead of throwing
+  `MethodError` on every call. It replaces (does not merge) the payload.
+
+| `0003-ir-typeref-validation-and-dict-fidelity`
+| C14, C23
+| Field `TypeRef`s are validated (unknown object names, list/optional recursion,
+  non-`String` map keys are rejected; self-referential types stay legal).
+  `to_dict` keeps composite shape (`{"list" => …}`) instead of `"Complex"`.
+  `from_dict` is no longer exported (it never existed).
+
+| `0004-openapi-json3-emitter`
+| C07
+| The spec is built as data and serialised once. `:id` becomes `{id}` with a
+  declared parameter; two verbs on one path merge; object types become
+  `components.schemas`; bodies appear only where expected. Adds a JSON3
+  dependency to `MaridOpenAPI`.
+
+| `0005-graphql-valid-sdl`
+| C08
+| A `Query` type is always emitted (placeholder `_empty: Boolean` when needed),
+  undefined built-in scalars are gone (`UInt64`/`Bytes`/`Void`/`JSON` are
+  declared custom scalars), input objects are declared, and `__schema` returns
+  `__Type`-shaped objects. Still not an executor — the docstring says so.
+
+| `0006-storage-no-silent-memory-fallback`
+| C05, P14
+| `ArangoStorageEngine` throws `ArgumentError` naming the unimplemented operation
+  unless constructed with `mock=true`; `is_mock` lets a test assert which it has.
+  `InMemoryEngine` copies on read.
+
+| `0007-live-json-escaping`
+| C09
+| JSON values are JSON3-encoded (no more `"$k": "$v"`), HTML attributes are
+  escaped, unknown Turbo actions / htmx swap modes are rejected, CR/LF in a
+  header value throws, and the SSE blocks have exactly one trailing blank line.
+
+| `0008-core-stable-problem-details`
+| C10
+| `type` is `…/problems/<slug>` (stable across renames), `title` is the HTTP
+  reason phrase, `instance` defaults to `/problems/<slug>`, and an optional
+  `trace_id` extension member carries the request id.
+|===
+
+== Before landing, add these (in the same review)
+
+* *Independent validation of the OpenAPI output* — the brief's acceptance
+  criterion is “emitted specs validate with independent tooling”. Add
+  `openapi-spec-validator` (PyPI) or `spectral` as a CI step over
+  `marid generate openapi examples/http_json/service.jl`. The patch makes the
+  document parseable; it does not prove it conforms.
+* *A gql-parser check of the SDL* — same reasoning for GraphQL.
+* *`just test` must pass with the patches applied*, and the MaridRPC patch must
+  keep the log line out of the client response (assert on a captured log, not
+  just on the response string).
+* *`check-julia-compat.jl`* must be re-run: two patches add `JSON3` to
+  `[deps]`/`[compat]` (MaridOpenAPI, MaridLive), and the gate requires an
+  upper-bounded compat entry for both.
+
+== Deliberately NOT in these patches
+
+Recorded here so nobody reads the list as complete:
+
+* `MaridArango` (C04) — replacing an in-memory mock with an HTTP client is a
+  design decision (real client vs explicit test double), not a patch. See the
+  storage ultraplan.
+* `MaridControl.put_key!` (C11) — the fix changes the subscriber API
+  (`Channel{Dict}` → a subscriber record with capacity and drop accounting).
+* `MaridRaft` truncation and commit rules (C13) — a consensus safety fix needs
+  the test harness that proves it; do not patch it blind.
+* `MaridTransport` (`listening_port` internals, keep-alive after a 413, interrupt
+  swallowing) — every one of these is entangled with the HTTP.jl 2.x migration;
+  fixing them against 1.x would create work to undo. See
+  link:../httpjl-2-migration.adoc[the migration plan].
+* Readiness gating on `is_ready` (C10 second half) — needs a socket test for the
+  startup window, which needs a Julia runtime.
+* The reference application (C15), the CLI generator fallback (C16), the arrival
+  pack (C02) and the Justfile stubs (A03) — each is a plan, not a patch; see the
+  ultraplans.

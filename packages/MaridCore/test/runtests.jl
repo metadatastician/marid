@@ -4,6 +4,13 @@
 using Test
 using MaridCore
 
+# Declared at top level: `struct` is not allowed inside a `@testset`. This type
+# exists only to exercise the `::MaridError` fallbacks, which no shipped error
+# kind reaches because each one has its own method.
+struct UnmappedTestError <: MaridError
+    message::String
+end
+
 @testset "MaridCore Complete Suite" begin
     # 1. Error Mapping & Problem Details
     @testset "RFC 9457 Domain Errors" begin
@@ -22,6 +29,39 @@ using MaridCore
         
         timeout = TimeoutError("Deadline reached", 150.0)
         @test status_code(timeout) == 504
+    end
+
+    # 1b. Stable problem-detail identifiers (C10)
+    @testset "Problem details identify the kind, stably" begin
+        pd = problem_details(NotFoundError("Taxon", "42"))
+        # Not "…/errors/MaridCore.NotFoundError": the type is a stable slug.
+        @test pd["type"] == "https://marid.hyperpolymath.org/problems/not-found"
+        @test pd["title"] == "Not Found"
+        @test pd["instance"] == "/problems/not-found"
+        @test pd["status"] == 404
+        @test occursin("42", pd["detail"])
+
+        @test error_slug(ValidationError("bad", "email", "required")) == "validation"
+        @test problem_details(UnauthorizedError())["title"] == "Unauthorized"
+        @test problem_details(ConflictError("c", "r", "v"))["status"] == 409
+        @test problem_details(TimeoutError("t", 1.0))["status"] == 504
+
+        # Unknown subclasses still map to a sane slug rather than throwing.
+        # `InternalError` has its own method, so it cannot test the fallback;
+        # this uses a subtype the module does not know about.
+        @test error_slug(UnmappedTestError("boom")) == "error"
+        @test status_code(UnmappedTestError("boom")) == 500
+        fallback = problem_details(UnmappedTestError("boom"))
+        @test fallback["type"] == "https://marid.hyperpolymath.org/problems/error"
+        @test fallback["title"] == "Error"
+        @test fallback["status"] == 500
+        # The shipped kinds still resolve to their own slugs.
+        @test error_slug(InternalError("boom")) == "internal"
+
+        # A trace id travels with the problem, as an extension member.
+        traced = problem_details(InternalError("safe"), trace_id="abc-123")
+        @test traced["trace_id"] == "abc-123"
+        @test occursin("safe", traced["detail"])
     end
 
     # 2. CallContext Lifecycle & Cancellation

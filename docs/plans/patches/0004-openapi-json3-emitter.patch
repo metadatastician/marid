@@ -1,0 +1,309 @@
+diff --git a/packages/MaridOpenAPI/Project.toml b/packages/MaridOpenAPI/Project.toml
+index 483ffb6..680f018 100644
+--- a/packages/MaridOpenAPI/Project.toml
++++ b/packages/MaridOpenAPI/Project.toml
+@@ -4,9 +4,11 @@ authors = ["Jonathan D.A. Jewell <6759885+hyperpolymath@users.noreply.github.com
+ version = "0.1.0"
+ 
+ [deps]
++JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+ MaridIR = "01a115b4-723a-8911-b469-7c18b764c41a"
+ 
+ [compat]
++JSON3 = "1.14"
+ MaridIR = "0.1"
+ julia = "1.10"
+ 
+diff --git a/packages/MaridOpenAPI/src/MaridOpenAPI.jl b/packages/MaridOpenAPI/src/MaridOpenAPI.jl
+index 140ebaa..af1f323 100644
+--- a/packages/MaridOpenAPI/src/MaridOpenAPI.jl
++++ b/packages/MaridOpenAPI/src/MaridOpenAPI.jl
+@@ -4,49 +4,161 @@
+ """
+     MaridOpenAPI
+ 
+-OpenAPI 3.1 and JSON Schema 2020-12 generator emitted directly from `MaridIR.ServiceDescriptor`.
++OpenAPI 3.1 and JSON Schema 2020-12 generator emitted from `MaridIR.ServiceDescriptor`.
++
++The document is built as data and serialised once by JSON3. The previous
++implementation interpolated a document as a string, so any description
++containing a quote or a newline produced invalid JSON, two methods sharing a
++path produced two `"path"` keys in one object, `:id` parameters appeared
++literally in the path template, and no schema components were emitted at all
++(`docs/audits/recon-2026-10-21.adoc`, C07).
++
++What this emitter does NOT do yet, so it cannot be mistaken for completeness:
++no `oneOf` for nullable beyond `anyOf` with `null`, no `examples`, no
++`security`, and no validation against an independent OpenAPI validator in CI.
++That validation is the acceptance criterion (`PROJECT_BRIEF.md` §2: "Emitted
++specs validate with independent tooling") and belongs to the adapter work.
+ """
+ module MaridOpenAPI
+ 
++using JSON3
+ using MaridIR
+ 
+ export emit_openapi_json
+ 
++const _VOID_SCHEMA = Dict{String, Any}("type" => "null")
++
++"""JSON Schema for one `TypeRef` (OpenAPI 3.1 uses JSON Schema 2020-12)."""
++function _json_schema(ref::TypeRef, known::Set{String})::Dict{String, Any}
++    if ref isa PrimitiveType
++        name = ref.name
++        name == "String" && return Dict{String, Any}("type" => "string")
++        name == "Int32" && return Dict{String, Any}("type" => "integer", "format" => "int32")
++        name == "Int64" && return Dict{String, Any}("type" => "integer", "format" => "int64")
++        name == "UInt32" && return Dict{String, Any}("type" => "integer", "format" => "uint32", "minimum" => 0)
++        name == "UInt64" && return Dict{String, Any}("type" => "integer", "format" => "uint64", "minimum" => 0)
++        name == "Float32" && return Dict{String, Any}("type" => "number", "format" => "float")
++        name == "Float64" && return Dict{String, Any}("type" => "number", "format" => "double")
++        name == "Bool" && return Dict{String, Any}("type" => "boolean")
++        name == "Bytes" && return Dict{String, Any}("type" => "string", "format" => "byte")
++        name == "Void" && return copy(_VOID_SCHEMA)
++        return Dict{String, Any}("type" => "string")
++    elseif ref isa ObjectType
++        # `ID` is used as a type name in descriptors but is not a primitive in
++        # the IR, so it arrives here as an ObjectType. Emitting a `$ref` to a
++        # component that no schema defines produces a document an independent
++        # validator rejects, so it is mapped explicitly.
++        ref.name == "ID" && return Dict{String, Any}("type" => "string")
++        ref.name in known || error(
++            "Object type '$(ref.name)' is referenced but not declared in svc.types; " *
++            "the emitted \$ref would dangle. Declare the type or emit a primitive.")
++        return Dict{String, Any}("\$ref" => "#/components/schemas/$(ref.name)")
++    elseif ref isa ListType
++        return Dict{String, Any}("type" => "array", "items" => _json_schema(ref.element_type, known))
++    elseif ref isa OptionalType
++        # 3.1 has no `nullable`; null is a type in the type union.
++        return Dict{String, Any}("anyOf" => Any[_json_schema(ref.inner_type, known), copy(_VOID_SCHEMA)])
++    elseif ref isa MapType
++        return Dict{String, Any}("type" => "object",
++                                 "additionalProperties" => _json_schema(ref.value_type, known))
++    end
++    return Dict{String, Any}()
++end
++
++"""`/taxa/:id` -> ("/taxa/{id}", parameters); OpenAPI templates use braces."""
++function _openapi_path(m::MethodDescriptor)
++    raw = isempty(m.route_path) ? "/$(m.name)" : m.route_path
++    parameters = Dict{String, Any}[]
++    segments = split(raw, '/')
++    for (index, segment) in enumerate(segments)
++        startswith(segment, ':') || continue
++        name = segment[2:end]
++        segments[index] = "{$name}"
++        push!(parameters, Dict{String, Any}(
++            "name" => name, "in" => "path", "required" => true,
++            "schema" => Dict{String, Any}("type" => "string")))
++    end
++    return join(segments, '/'), parameters
++end
++
++function _body_schema(type_name::String, known::Set{String})::Dict{String, Any}
++    type_name == "Void" && return copy(_VOID_SCHEMA)
++    type_name in MaridIR.PRIMITIVE_NAMES && return _json_schema(PrimitiveType(type_name), known)
++    return _json_schema(ObjectType(type_name), known)
++end
++
+ """
+     emit_openapi_json(svc::ServiceDescriptor) -> String
+ 
+-Emits an OpenAPI 3.1 specification JSON from a service descriptor.
++Emit an OpenAPI 3.1 specification as pretty-printed JSON.
++
++Paths are merged per operation, `:parameter` segments become `{parameter}`
++templates with matching `parameters` entries, object types become
++`components.schemas` entries, and verbs that carry a body get a `requestBody`
++referencing the method's input type. Every string is escaped by the JSON
++serialiser, so a description containing quotes, newlines or non-BMP characters
++cannot corrupt the document.
+ """
+ function emit_openapi_json(svc::ServiceDescriptor)::String
+-    paths_list = String[]
++    known = Set{String}(t.name for t in svc.types)
++    schemas = Dict{String, Any}()
++    for t in svc.types
++        properties = Dict{String, Any}()
++        required = String[]
++        for f in t.fields
++            properties[f.name] = _json_schema(f.type_ref, known)
++            f.nullable || push!(required, f.name)
++        end
++        schema = Dict{String, Any}("type" => "object", "properties" => properties)
++        isempty(required) || (schema["required"] = required)
++        isempty(t.description) || (schema["description"] = t.description)
++        schemas[t.name] = schema
++    end
++
++    paths = Dict{String, Any}()
+     for m in svc.methods
+-        p = isempty(m.route_path) ? "/$(m.name)" : m.route_path
++        path, parameters = _openapi_path(m)
+         verb = lowercase(m.http_method)
+-        push!(paths_list, """    "$p": {
+-      "$verb": {
+-        "operationId": "$(m.name)",
+-        "summary": "$(m.description)",
+-        "responses": {
+-          "200": {
+-            "description": "Successful operation"
+-          }
+-        }
+-      }
+-    }""")
++        operation = Dict{String, Any}(
++            "operationId" => m.name,
++            "responses" => Dict{String, Any}(
++                "200" => Dict{String, Any}(
++                    "description" => "Successful operation",
++                    "content" => Dict{String, Any}(
++                        "application/json" => Dict{String, Any}(
++                            "schema" => _body_schema(m.output_type, known)))),
++                "default" => Dict{String, Any}(
++                    "description" => "Error (RFC 9457 problem details)",
++                    "content" => Dict{String, Any}(
++                        "application/problem+json" => Dict{String, Any}(
++                            "schema" => Dict{String, Any}("type" => "object"))))))
++        isempty(m.description) || (operation["summary"] = m.description)
++        isempty(parameters) || (operation["parameters"] = parameters)
++        if !(uppercase(m.http_method) in ("GET", "HEAD", "DELETE", "OPTIONS")) && m.input_type != "Void"
++            operation["requestBody"] = Dict{String, Any}(
++                "required" => true,
++                "content" => Dict{String, Any}(
++                    "application/json" => Dict{String, Any}(
++                        "schema" => _body_schema(m.input_type, known))))
++        end
++        # Merge per operation instead of appending a second "path" key.
++        entry = get!(paths, path, Dict{String, Any}())
++        entry[verb] = operation
+     end
+-    paths_str = join(paths_list, ",\n")
+-    
+-    return """{
+-  "openapi": "3.1.0",
+-  "info": {
+-    "title": "$(svc.name)",
+-    "version": "$(svc.version)",
+-    "description": "$(svc.description)"
+-  },
+-  "paths": {
+-$paths_str
+-  }
+-}"""
++
++    document = Dict{String, Any}(
++        "openapi" => "3.1.0",
++        "info" => Dict{String, Any}(
++            "title" => svc.name, "version" => svc.version,
++            "description" => svc.description),
++        "paths" => paths)
++    isempty(schemas) || (document["components"] = Dict{String, Any}("schemas" => schemas))
++    # `JSON3.pretty(x)` writes to stdout and returns `nothing`; it is not a
++    # serialiser that hands back a string. Render into a buffer instead, or the
++    # `::String` return annotation throws and the document lands in the log.
++    buffer = IOBuffer()
++    JSON3.pretty(buffer, document)
++    return String(take!(buffer))
+ end
+ 
+ end # module MaridOpenAPI
+diff --git a/packages/MaridOpenAPI/test/runtests.jl b/packages/MaridOpenAPI/test/runtests.jl
+index a9b8659..829df30 100644
+--- a/packages/MaridOpenAPI/test/runtests.jl
++++ b/packages/MaridOpenAPI/test/runtests.jl
+@@ -2,17 +2,89 @@
+ # Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+ 
+ using Test
++using JSON3
+ using MaridIR
+ using MaridOpenAPI
+ 
+ @testset "MaridOpenAPI Tests" begin
+-    m = MethodDescriptor("getTaxon", "String", "Taxon", route_path="/taxon/:id", http_method="GET", description="Retrieve taxon")
+-    svc = ServiceDescriptor("TaxonomyService", "1.0.0", TypeDescriptor[], [m])
+-    
++    # The output type must be declared: an undeclared one would make the emitter
++    # write a `$ref` to a component that does not exist.
++    taxon = TypeDescriptor("Taxon", [FieldDescriptor("id", PrimitiveType("String"))])
++    m = MethodDescriptor("getTaxon", "String", "Taxon", route_path="/taxon/:id",
++                         http_method="GET", description="Retrieve taxon")
++    svc = ServiceDescriptor("TaxonomyService", "1.0.0", [taxon], [m])
++
+     spec = emit_openapi_json(svc)
+-    
++
+     @test occursin("\"openapi\": \"3.1.0\"", spec)
+     @test occursin("\"title\": \"TaxonomyService\"", spec)
+-    @test occursin("\"/taxon/:id\"", spec)
+     @test occursin("\"operationId\": \"getTaxon\"", spec)
+ end
++
++@testset "Undeclared object types are refused, not emitted as dangling refs" begin
++    # `ID` arrives as an ObjectType (it is not a primitive in the IR) and is
++    # mapped to a string schema rather than a reference to nothing.
++    id_type = TypeDescriptor("Widget", [FieldDescriptor("id", "ID")])
++    svc_id = ServiceDescriptor("WidgetService", "1.0.0", [id_type], [
++        MethodDescriptor("getWidget", "String", "Widget", http_method="GET")])
++    doc = JSON3.read(emit_openapi_json(svc_id))
++    @test doc.components.schemas[:Widget].properties[:id].type == "string"
++
++    # Anything else undeclared is a descriptor bug: fail with the name in the
++    # message instead of publishing a document with a reference to nothing.
++    svc_bad = ServiceDescriptor("BrokenService", "1.0.0", TypeDescriptor[], [
++        MethodDescriptor("getThing", "String", "Thing", http_method="GET")])
++    err = try
++        emit_openapi_json(svc_bad)
++        nothing
++    catch e
++        e
++    end
++    @test err isa ErrorException
++    @test occursin("Thing", sprint(showerror, err))
++end
++
++@testset "Spec is valid JSON and OpenAPI-shaped (C07)" begin
++    taxon = TypeDescriptor("Taxon", [
++        FieldDescriptor("id", PrimitiveType("String")),
++        FieldDescriptor("name", PrimitiveType("String"), nullable=true),
++        FieldDescriptor("children", ListType(ObjectType("Taxon")))
++    ], description="A clade \"node\"\nsecond line — λ 🐟")
++    svc = ServiceDescriptor("TaxonomyService", "1.0.0", [taxon], [
++        MethodDescriptor("getTaxon", "String", "Taxon", route_path="/taxon/:id",
++                         http_method="GET", description="Get \"one\" taxon\nplease"),
++        MethodDescriptor("deleteTaxon", "String", "Void", route_path="/taxon/:id",
++                         http_method="DELETE"),
++        MethodDescriptor("createTaxon", "Taxon", "Taxon", route_path="/taxon",
++                         http_method="POST")
++    ])
++
++    spec = emit_openapi_json(svc)
++    # 1. It parses. Interpolation of the description above used to break this.
++    doc = JSON3.read(spec)
++    @test doc.openapi == "3.1.0"
++
++    # 2. :id became an OpenAPI template, and the parameter is declared.
++    get_op = doc.paths[Symbol("/taxon/{id}")]["get"]
++    @test get_op.operationId == "getTaxon"
++    @test get_op.parameters[1].name == "id"
++    @test get_op.parameters[1].in == "path"
++    @test get_op.parameters[1].required == true
++
++    # 3. Two verbs on one path are merged into one path item, not two keys.
++    @test haskey(doc.paths[Symbol("/taxon/{id}")], :delete)
++    # Path order is a Dict's, so compare as a set rather than as a sequence.
++    @test Set(keys(doc.paths)) == Set([Symbol("/taxon"), Symbol("/taxon/{id}")])
++
++    # 4. Request bodies appear only where a body is expected.
++    @test haskey(doc.paths[Symbol("/taxon")]["post"], :requestBody)
++    @test !haskey(doc.paths[Symbol("/taxon/{id}")]["delete"], :requestBody)
++
++    # 5. Descriptions survive escaping intact.
++    @test occursin("second line", String(doc.components.schemas[:Taxon].description))
++
++    # 6. Object types are referenced from components, not inlined as strings.
++    ok = doc.paths[Symbol("/taxon/{id}")]["get"].responses[Symbol("200")].content[Symbol("application/json")].schema
++    @test ok[Symbol("\$ref")] == "#/components/schemas/Taxon"
++    @test doc.components.schemas[:Taxon].properties[:children].type == "array"
++end

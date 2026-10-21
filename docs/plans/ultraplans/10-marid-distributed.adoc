@@ -1,0 +1,87 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Ultraplan 10 — MaridControl, MaridRaft, MaridCRDT: safety first, or say no
+
+== Your single question
+
+Three distributed packages are in the tree, all marked experimental and none
+wired into anything. Which of them can be made *safe* with the evidence budget
+available, and which should be explicitly removed or frozen?
+
+== Where you are
+
+`metadatastician/marid`. Read `PROJECT_BRIEF.md` §2 (Later phases),
+`docs/plans/charter-recovery-and-next-steps.adoc` (work packages G and H), and
+`docs/audits/recon-2026-10-21.adoc` (C03, C11, C13, P07–P09).
+
+== Confirmed state
+
+* `MaridControl.swap_snapshot!` was uncallable until patch 0002 (no test existed).
+  `put_key!` holds the backend lock across `put!` on subscriber channels (a
+  capacity-0 channel blocks until a receiver arrives — deadlock whenever a
+  subscriber exists), and there is no `subscribe` API, so the only way to add one
+  is to push onto a public vector. `sync_from_backend!` merges a caller-supplied
+  `Dict` without consulting the backend.
+* `MaridRaft` truncates a follower's log when `prev_log_term` mismatches
+  (Raft never does; the leader decrements `nextIndex` instead), advances the
+  commit index only inside a matching AppendEntries, ignores
+  `reply.success == false`, does not apply the §5.4.2 current-term rule, exports a
+  `step_clock!` that does not exist, and persists neither `current_term` nor
+  `voted_for`. Its tests are in-process simulations.
+* `MaridCRDT` decides OR-Set liveness by comparing add/remove timestamps rather
+  than observed tags (clock skew can resurrect a removed element); tombstones
+  grow without bound; the suite is examples, not properties.
+
+== The task
+
+1. *Apply patch 0002* and add the concurrent test that would have caught the
+   original bug: `Threads.@spawn` readers versus a swapping writer, run under
+   `julia -t 4` in CI. An `@async`-only test cannot observe a torn read.
+2. *MaridControl:* fix the subscription API (a subscriber record with a bounded
+   buffer and an explicit drop policy), push outside the lock, and make
+   `sync_from_backend!` either read the backend or stop claiming to. Add a
+   partition test: control plane down, requests keep serving from the last good
+   snapshot; control plane returns with a changed config; swap is atomic.
+3. *MaridRaft — decide, do not drift.* Either (a) freeze it: remove
+   `step_clock!` from the exports, add a module-level “NOT SAFE — do not wire
+   into any deployment” header and keep it out of default assembly, or (b) fix it
+   with the test harness that proves the fix: conflicting-log truncation, commit
+   only on majority *and* current term, catch-up after a missed append, durable
+   term/vote across restart, partitioned minority cannot commit. (b) is a
+   multi-week Jepsen-shaped effort and the brief requires owner approval and a
+   budget before it starts. The elegant default today is (a) plus a written
+   argument for why etcd/Consul remains sufficient.
+4. *MaridCRDT:* implement OR-Set properly (tag sets; removal requires having
+   observed the tag) or rename and document the clock assumption. The
+   acceptance differs by branch and must not be shared:
+   * *Observed-tag branch:* property tests for commutativity, associativity,
+     idempotence of merge, convergence under random merge orders, and a
+     partition simulator with random schedules.
+   * *Clock-based branch:* those properties do not prove the thing that
+     matters — that a removal cannot be resurrected under clock skew. Mark the
+     implementation explicitly non-safe and non-deployable, keep it out of any
+     assembly path, and state the assumption in the module docstring. It does
+     not earn the convergence gate above.
+5. *Nothing in this pass may be wired into `MaridApp`, the example, or any
+   deployment.* These are optional control-plane features; the data plane must
+   not depend on them.
+
+== Acceptance
+
+* Control: thread-based swap test green under `-t 4`; no blocking under a lock;
+  a partition test with a documented drop policy.
+* Raft: either a frozen module with no phantom exports and an explicit warning,
+  or the full safety test list above with logs.
+* CRDT: property tests with a fixed seed and a recorded run count; convergence
+  demonstrated across ≥3 nodes and ≥100 random schedules.
+
+== Stop conditions
+
+* Do not start a Raft correctness project without owner approval of the budget.
+* Do not present simulation as distribution: no network, no separate processes,
+  no claim of consensus.
+* Do not add these packages to any assembly path.
+
+== Report format
+
+Per package: decision (fix / freeze / remove), the safety argument, the tests
+that back it, and the residual risk in one sentence.
