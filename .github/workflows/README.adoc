@@ -61,3 +61,18 @@ pins), and gitleaks in CI catches a genuine SonarCloud token as `generic-api-key
 
 Each targets a different language/surface; together they cover what no single
 analyser does.
+
+== Two verdict grids, two comments, on purpose
+
+`hypatia-scan.yml` and `k9-validate.yml` each post a verdict grid to the pull
+request (`docs/VERDICT-GRID-SPEC.adoc` in `hyperpolymath/standards`). They are
+separate comments because the two lanes grade different things: `k9` grades
+*conformance* (did the contract pass the rules it must pass?) and `hypatia`
+grades *findings* (what did a scanner report, and how bad is the worst of it?).
+The families share orange and grey and nothing else, and the spec forbids
+mixing them in one row.
+
+Do not merge the two posting jobs, and do not collapse the comments into one.
+The DEED–K9 grid is advisory until a run on `main` renders green or yellow; the
+Hypatia grid is report-only. `docs/practice/PR-VERDICT-GRIDS.adoc` holds the
+detail, including the removal condition on the advisory job.
