@@ -85,6 +85,7 @@ workflows:
         - 'hyperpolymath/standards@da2c748aad55c1a1dcba00b60fe4a35017bc6540'
     '.github/workflows/secret-scanner.yml':
         - 'hyperpolymath/standards@da2c748aad55c1a1dcba00b60fe4a35017bc6540'
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/security-policy.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/sonarqube.yml':
