@@ -117,10 +117,12 @@ Format a Datastar `datastar-merge-fragments` SSE block. `morph` is the default
 and is therefore omitted, which is what Datastar expects.
 """
 function datastar_merge_fragments(html::String; selector::String="", merge_mode::String="morph")::String
+    safe_selector = _header_value(selector, "selector")
+    safe_merge_mode = _header_value(merge_mode, "merge_mode")
     buf = IOBuffer()
     println(buf, "event: datastar-merge-fragments")
-    isempty(selector) || println(buf, "data: selector $selector")
-    merge_mode == "morph" || println(buf, "data: mergeMode $merge_mode")
+    isempty(safe_selector) || println(buf, "data: selector $safe_selector")
+    safe_merge_mode == "morph" || println(buf, "data: mergeMode $safe_merge_mode")
     for line in split(replace(html, "\r\n" => "\n", '\r' => ""), '\n')
         println(buf, "data: fragments $line")
     end
