@@ -47,8 +47,15 @@ jobs:
           version: ${{ matrix.version }}
       - name: Run Package Tests
         run: |
-          julia --startup-file=no scripts/bootstrap.jl packages/${{ matrix.package }}
-          julia --startup-file=no --project=packages/${{ matrix.package }} packages/${{ matrix.package }}/test/runtests.jl
+          set +e
+          julia --startup-file=no scripts/bootstrap.jl "packages/${{ matrix.package }}" > /tmp/boot.log 2>&1
+          rc1=$?
+          julia --startup-file=no --project="packages/${{ matrix.package }}" "packages/${{ matrix.package }}/test/runtests.jl" > /tmp/test.log 2>&1
+          rc2=$?
+          emit() { body=$(tail -c 7000 "$2" | sed ':a;N;$!ba;s/\n/%0A/g'); echo "::error title=$1::$body"; }
+          [ $rc1 -ne 0 ] && emit "boot-${{ matrix.package }}-rc$rc1" /tmp/boot.log
+          [ $rc2 -ne 0 ] && emit "test-${{ matrix.package }}-rc$rc2" /tmp/test.log
+          if [ $rc1 -ne 0 ] || [ $rc2 -ne 0 ]; then exit 1; fi
 
   http-json:
     name: Real unary HTTP/JSON (not persistence or browser acceptance)
