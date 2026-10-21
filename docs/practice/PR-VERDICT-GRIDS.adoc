@@ -102,7 +102,11 @@ baseline, and a forged baseline is how a regression renders as an improvement.
   +
   If the first run is red on pre-existing debt, the lane's own remedy is the
   shrink-only ledger `.machine_readable/k9-contract-debt.txt`, where a recorded
-  entry is non-blocking and ratchets down. Disabling the lane is not a remedy,
+  entry is non-blocking and ratchets down. A new entry is an exemption only
+  when the commit message or PR body includes
+  `Ratchet-exception: .machine_readable/k9-contract-debt.txt — reason` (or the
+  equivalent parenthesised form). Without it, the new entry exempts nothing.
+  Disabling the lane is not a remedy,
   and `fail-on-indeterminate` stays `false` so missing evidence does not fail
   the job on top of it.
 
