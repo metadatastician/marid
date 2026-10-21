@@ -4,9 +4,11 @@ authors = ["Jonathan D.A. Jewell <6759885+hyperpolymath@users.noreply.github.com
 version = "0.1.0"
 
 [deps]
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 MaridIR = "01a115b4-723a-8911-b469-7c18b764c41a"
 
 [compat]
+JSON3 = "1.14"
 MaridIR = "0.1"
 julia = "1.10"
 
