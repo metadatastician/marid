@@ -97,8 +97,11 @@ end
     # is a BoundsError, not a comparison.
     @test !("Node" in [String(m.captures[1]) for m in eachmatch(r"^scalar\s+([A-Za-z_][A-Za-z0-9_]*)"m, sdl)])
 
-    # Nested object references inside an input must point at the input twin, or
-    # the reference dangles: an input field cannot be an output object type.
-    @test occursin("children: [NodeInput]!", sdl)
-    @test !occursin("children: [Node]!", sdl)
+    # An output type may reference itself as an object; an input type must use
+    # the input twin, because an input field cannot be an output object type.
+    # Both are correct at once, so the assertions have to be scoped to the
+    # respective blocks: forbidding `children: [Node]!` outright was wrong, as
+    # `type Node` is supposed to contain exactly that.
+    @test occursin("type Node {\n  id: String!\n  children: [Node]!", sdl)
+    @test occursin("input NodeInput {\n  id: String!\n  children: [NodeInput]!", sdl)
 end
