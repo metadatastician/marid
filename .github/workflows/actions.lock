@@ -182,8 +182,8 @@ dependencies:
     'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed':
         ref: '22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'
         commit: 'sha1-22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'
-        owner_id: 356423100
-        repo_id: 42048915
+        owner_id: 42048915
+        repo_id: 356423100
     'dependabot/fetch-metadata@v3.1.0':
         ref: 'v3.1.0'
         commit: 'sha1-25dd0e34f4fe68f24cc83900b1fe3fe149efef98'
