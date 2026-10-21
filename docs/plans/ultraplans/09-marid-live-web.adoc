@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Ultraplan 09 — MaridLive + the browser client: escaping, reconnection, real browsers
+
+== Your single question
+
+The live helpers are string builders and the browser client is a `fetch` wrapper
+with unit tests. What would it take for a real browser, over a real socket, to
+receive live updates and recover from a dropped connection — and what does the
+current client silently get wrong?
+
+== Where you are
+
+`metadatastician/marid`. Read `web/*`, `packages/MaridLive/src/MaridLive.jl`,
+`docs/plans/patches/0007-*.patch`, and `docs/audits/recon-2026-10-21.adoc`
+(C09, C20).
+
+== Confirmed state
+
+* `MaridLive` interpolated JSON (`"\"$k\": \"$v\""`) and HTML attributes; unknown
+  Turbo actions and htmx swap modes were accepted; header values were not
+  checked for CR/LF.
+* `web/client/src/index.js`: clean EOF breaks the read loop and *does not*
+  reconnect, although the docstring says it does; errors retry at a fixed
+  interval with no backoff and no retryable-status filter (a 401 loops forever);
+  SSE frames split on `"\n\n"` only (CRLF streams never parse); the resume cursor
+  is a query parameter rather than `Last-Event-ID`; `timeoutMs: 0` is unreachable
+  because of `||`; the caller's abort listener is added per call and never
+  removed.
+* There is no EventSource client in `web/` at all: the client hand-parses a
+  `fetch` stream. No browser test exists; the four suites are Bun unit tests.
+
+== The task
+
+1. *Apply patch 0007* (JSON3 encoding, attribute escaping, action/mode
+   validation, CRLF rejection, single trailing blank line). Run `bun test` in
+   `web/` and the Julia suite.
+2. *Fix the client, test-first, in Bun:*
+   * reconnect on clean EOF as well as on error, with exponential backoff + jitter
+     and a cap;
+   * retry only 408/429/5xx and network errors — never 4xx auth failures;
+   * parse `\r\n` and `\n`;
+   * send `Last-Event-ID` (and keep the query parameter only if the server needs
+     it — document which);
+   * `??` instead of `||` for `timeoutMs`; store and remove the abort listener;
+   * assert the reconnect path with a `ReadableStream` stub that closes cleanly,
+     then with one that errors, then with one that returns 401 once.
+3. *Server side:* the SSE endpoint does not exist yet (the transport is unary
+   JSON). Do not fake it in the browser client. If
+   `docs/plans/ultraplans/05-marid-transport.adoc` has landed, add the smallest
+   real SSE endpoint to `examples/http_json` using `MaridTransport.format_sse_event`
+   and MaridLive helpers, with sequence numbers and `Last-Event-ID` replay.
+4. *Real browser evidence, which is the only acceptance that counts here:* one
+   Playwright (or equivalent) test against Chromium, Firefox and WebKit that
+   loads a page using the Custom Element, receives an event, sees the DOM change,
+   is killed mid-stream, and recovers with the right resume point. Log the
+   browser versions.
+5. *Say what is not covered:* SSR safety is claimed from a shim, not proven;
+   the React/Vue integrations are tested against hand-written shims, not the real
+   frameworks.
+
+== Acceptance
+
+* `bun test` covers the three reconnect scenarios and CRLF parsing.
+* One real-browser run per engine with logs; the page uses the shared Custom
+  Element, and an event visibly changes the DOM.
+* MaridLive output is JSON3-encoded and attribute-escaped, proven by tests with
+  quotes, newlines and `<script>`.
+
+== Stop conditions
+
+* Do not implement WebSocket or Datastar-over-WS here; SSE first, behind the
+  transport plan.
+* Do not use a framework shim as evidence of framework compatibility.
+* Do not claim “browser support” from a Bun test.
+
+== Report format
+
+Client behaviours (before → after → test name), then the browser matrix with
+versions and what each run proved.

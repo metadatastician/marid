@@ -1,0 +1,313 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= Migrating MaridTransport to HTTP.jl 2.x
+:toc: left
+:toclevels: 3
+:sectnums:
+:revdate: 2026-10-21
+
+[IMPORTANT]
+====
+This is a *plan with spike code*, not a completed migration. It was written in an
+environment with no Julia runtime, so nothing below has been executed. Phase 0 is
+the step that turns the plan into evidence, and it must run before Phase 1 is
+started. Every claim about HTTP.jl 2.x's surface comes from the v2.0.0 release
+notes (2026-05-28) and the migration guide they reference; where the plan needs a
+detail the notes do not give, it says so and names the spike that settles it.
+====
+
+== Why migrate, and why now
+
+[cols="2,3",options="header"]
+|===
+| Fact | Consequence for Marid
+
+| HTTP.jl v2.0.0 (2026-05-28) is "a breaking major release and a broad rewrite of
+  the package internals and public API on top of Reseau.jl"; current is v2.11.1
+  (2026-10-21)
+| The 1.x line Marid pins (`HTTP = "1.10"`, resolved 1.11.0) is no longer the
+  line upstream develops. Every month on it is a month of deferred work.
+
+| 2.x adds first-class HTTP/2, SSE and WebSocket *server* support
+| Three charter features (Phase 5 live transport, Phase 8 gRPC) currently blocked
+  on "there is no production HTTP/2 server in Julia" become tractable.
+
+| `Response.status_code` → `Response.status`; the client layer stack, `pool`,
+  `sslconfig`, `retry_*` APIs are replaced by `HTTP.Client`/`HTTP.Transport`
+  and explicit keywords; WebSockets move under `HTTP.WebSockets`
+| Marid's *listener* uses `HTTP.serve!` with `stream=true` and reads the server
+  object's internals; its *example suite* uses `HTTP.request`/`HTTP.get` on the
+  client side. Both need checking.
+
+| "Undocumented 1.x internals … are no longer supported migration targets"
+| `listening_port(server) = server.listener.server` is exactly that. It is a
+  migration blocker today, not a future risk.
+|===
+
+The migration is small in *surface* because Marid deliberately hides HTTP.jl: the
+handler receives `TransportRequest`, returns `TransportResponse`, and nothing
+above `MaridTransport` mentions HTTP.jl. The work is concentrated in three files:
+
+[cols="2,1,3",options="header"]
+|===
+| File | Lines | Role
+
+| `packages/MaridTransport/src/http.jl` | 82
+| `serve_http` (listener), `_read_request` (body/limits/canonical-path gate),
+  `listening_port`, `TransportRequest`/`TransportResponse`
+| `packages/MaridCore/ext/MaridHTTPJSONExt.jl` | 91
+| Routing, negotiation, dispatch, redaction, lifecycle flags — transport-agnostic
+  by design, so it should need *no* change
+| `examples/http_json/test/runtests.jl` | 88
+| The 38-assertion socket suite, which is the acceptance test for the migration
+|===
+
+If the extension needs changes beyond `listening_port`, the seam has leaked and
+that is itself a finding to record before proceeding.
+
+== Target outcome
+
+After migration, `MaridTransport` must satisfy all of:
+
+. The 38 assertions in `examples/http_json/test/runtests.jl` still pass, unedited
+  except where they assert a real behaviour change (none is expected).
+. `listening_port` no longer reads a deprecated internal; the port is obtained
+  from a supported API or returned by `serve_http`.
+. A regression test proves that an over-limit request leaves the connection in a
+  defined state (see <<_phase_3,_phase 3>>), because 1.x behaviour here is
+  unknown and 2.x may differ.
+. Interrupts (`InterruptException`) propagate out of a handler instead of being
+  converted to a 500 by the blanket `catch` (`C12`).
+. Handler-supplied response headers never produce a duplicate `Content-Length`.
+. The package's `[compat]` entry is `HTTP = "2.11"` (not `"2"`: pin the minor so
+  a future 2.x cannot change the streaming contract silently), the example
+  manifest is regenerated, and `julia-ci.yml` runs both LTS Julia and current
+  Julia against it.
+. CI additionally runs the *matrix on 1.10 and 1.13*, because “the transport
+  builds on the supported Julia versions” is part of the claim.
+
+Non-goals for this migration: adding SSE, WebSocket or HTTP/2 *features*. The
+migration only buys the foundation; each feature gets its own gate with a real
+client (see `PROJECT_BRIEF.md` §2 and the evidence ledger).
+
+== Phase 0 — spike: learn 2.x's actual surface (must run first)
+
+No production code changes. Create `test/spikes/httpjl2/` with a throwaway
+project and one script that answers, by *execution*, the questions the plan
+depends on:
+
+[source,julia]
+----
+# test/spikes/httpjl2/spike.jl  (throwaway; delete after recording results)
+using Pkg; Pkg.activate(@__DIR__); Pkg.add(name="HTTP", version="2.11")
+
+using HTTP, Sockets
+
+println("HTTP version: ", pkgversion(HTTP))
+
+# Q1. Does `serve!` still take a do-block over a stream, and is `stream=true`
+#     still the keyword that yields one?
+server = HTTP.serve!("127.0.0.1", 0; stream=true, verbose=-1) do stream
+    HTTP.setstatus(stream, 200)
+    HTTP.setheader(stream, "Content-Type" => "text/plain")
+    HTTP.setheader(stream, "Content-Length" => "2")
+    HTTP.startwrite(stream)
+    write(stream, "ok")
+end
+
+# Q2. How do I learn the bound port through a SUPPORTED API?
+println("server type: ", typeof(server))
+dump(server)                      # record what is public vs internal
+try println("getsockname: ", Sockets.getsockname(server.listener.server))
+catch e println("1.x path gone: ", e) end
+
+# Q3. What does the handler-visible request look like, and can I read a bounded
+#     body without buffering the whole thing?
+# Q4. What happens to the connection when a handler returns without reading the
+#     body (the 413 path in `_read_request`)? Two requests on one socket.
+# Q5. Does `HTTP.request(...; status_exception=false, retry=false)` still exist
+#     with those keywords, or is it `HTTP.Client` now?
+
+close(server)
+----
+
+Record the answers in `docs/audits/httpjl-2-spike.adoc` with the exact
+package version and the printed `dump`. **Do not** proceed to Phase 1 on the
+strength of the release notes alone: Q2 and Q4 are the two places where the
+notes are silent and where a wrong guess produces a listener that cannot report
+its port or that desynchronises keep-alive connections.
+
+Exit criteria for Phase 0: five written answers, each with the command that
+produced it, committed as an audit. If Q2 has no supported answer, take the
+alternative in Phase 2 (return the port from `serve_http`) rather than keeping an
+internal read.
+
+== Phase 1 — isolate the transport surface (no behaviour change, 1.x, today)
+
+Land this *before* the upgrade so the diff of the upgrade is small:
+
+. Introduce `struct TransportServer` in `MaridTransport` holding whatever handle
+  the library returns plus the bound port:
+  [source,julia]
+  ----
+  struct TransportServer
+      handle::Any          # HTTP.jl server object; never exported
+      port::Int            # resolved once, at listen time
+  end
+  Base.close(s::TransportServer) = close(s.handle)
+  Base.isopen(s::TransportServer) = isopen(s.handle)
+  Base.wait(s::TransportServer) = wait(s.handle)
+  ----
+  `serve_http` returns a `TransportServer`; `listening_port(s)` reads `s.port`.
+  The example suite keeps calling `listening_port(server)` and `close(server)`,
+  so it is untouched by this change — which is the point: the test that proves
+  the migration is the test that must not change.
+. Move the exception handling from a bare `catch` to
+  `catch err; err isa InterruptException && rethrow(); ...`.
+. De-duplicate headers in one place: build the final header list, drop any
+  handler-supplied `Content-Length`, then set our own.
+
+Verification: `just test`, `examples/http_json` suite green on 1.x. Commit.
+
+== Phase 2 — upgrade the dependency and the listener
+
+[source,toml]
+----
+# packages/MaridTransport/Project.toml
+[compat]
+HTTP = "2.11"
+----
+
+Expected edits in `http.jl` (confirm each against the spike, do not apply blind):
+
+[cols="2,2",options="header"]
+|===
+| 1.x code | 2.x form (to be confirmed in Phase 0)
+
+| `listening_port(server) = Int(Sockets.getsockname(server.listener.server)[2])`
+| the supported port from the spike, carried in `TransportServer.port`
+
+| `HTTP.serve!(host, port; stream=true, readtimeout, on_shutdown, verbose=-1) do stream`
+| the 2.x server entry point with a `RequestContext`; map `readtimeout` to the
+  2.x timeout keyword (`request_timeout` / structured timeout phases)
+
+| `stream.message` to read method/target/headers
+| the typed `Request` carried by the 2.x server context; `Response.status` not
+  `status_code`
+
+| `HTTP.setstatus` / `HTTP.setheader` / `HTTP.startwrite` on a `Stream`
+| the 2.x response writer, or `HTTP.Response` + a write call if that is the
+  documented 2.x path
+|===
+
+Also update `examples/http_json`: `HTTP.request(...; status_exception=false,
+retry=false)` and `HTTP.get(...)` in its test suite, and `Project.toml`'s
+`HTTP = "1.10"`. Then `scripts/bootstrap.jl examples/http_json` to regenerate
+`Manifest.toml` (it is committed; the file must be regenerated, never hand-edited).
+
+Do **not** change `MaridCore` or the extension in this phase. If they need
+changing, stop and record a seam-leak finding.
+
+== Phase 3 — the behaviours the upgrade can silently change
+
+Write these tests *before* trusting the upgrade, because they are the ones that
+differ between HTTP stacks and none of them is covered today:
+
+[cols="2,3",options="header"]
+|===
+| Test | Why it exists
+
+| Two requests, one connection, first is over the body limit
+| `_read_request` returns 413 without draining the body (`C12`). On 1.x we know
+  the connection is closed; on 2.x the stack may attempt keep-alive and the
+  second request would then be parsed from the middle of the first body. Assert
+  either a closed connection or a correct second response — never a hang.
+
+| Chunked request, over limit, no trailing chunk
+| The example suite sends a well-formed chunked 413 and closes. Add the truncated
+  case: the server must answer rather than block until `readtimeout`.
+
+| `Content-Length` set by a handler
+| The transport sets its own; assert exactly one header on the wire.
+
+| Ctrl-C during a slow handler
+| `InterruptException` must propagate, not become a 500 (`C12`).
+
+| `port=0` reports the bound port
+| Proves `TransportServer.port` is filled from the stack, not guessed.
+
+| Client disconnect mid-response
+| Whatever the stack does, it must not leave the app's `is_draining`/`is_ready`
+  flags wrong or leak a task per abandoned connection.
+|===
+
+== Phase 4 — CI and the evidence trail
+
+. `julia-ci.yml` matrix: `['1.10', '1.13']` (LTS + current) for the package
+  matrix, and the `http-json` job pins the current Julia. Rationale in the recon
+  report (A02): 1.11's last release was 2026-02-08 and 1.12/1.13 are untested.
+. Add a job that runs the *same* example suite twice: once against the committed
+  manifest, once after `Pkg.update()` of HTTP within the 2.11 series. That is the
+  cheapest possible early warning for a minor-version transport regression.
+. Append a checkpoint to `docs/audits/evidence-ledger.adoc` with the exact HTTP
+  version, Julia version, assertion count and commands. No “transport accepted”
+  language: the migration makes the foundation current, it does not prove SSE,
+  WebSocket or HTTP/2 support.
+
+== Risks and their mitigations
+
+[cols="2,3",options="header"]
+|===
+| Risk | Mitigation
+
+| 2.x's streaming server contract differs from 1.x's `stream=true` do-block
+| Phase 0 Q1. If the shape is materially different, rewrite `serve_http` as a
+  thin adapter around whatever 2.x offers and keep `TransportRequest`/`Response`
+  identical, so no caller changes.
+
+| `HTTP.request(...; status_exception=false, retry=false)` keywords are gone
+| Phase 0 Q5. The example suite is the only client-side user; use `HTTP.Client`
+  in the test helper.
+
+| Reseau introduces a native dependency that breaks a clean install
+| The `cli-and-emitters` precompile gate already proves a fresh depot can
+  install; run it before and after in the same environment and compare.
+
+| The migration lands half-done (1.x listener, 2.x client)
+| Not possible: `Project.toml` has one `HTTP` compat entry per environment.
+  Keep both example and package on the same major in one commit.
+
+| Time-boxed: 2.x is younger than 1.x
+| Pin the minor (`2.11`), not the major, so a new 2.x cannot change behaviour
+  under us; treat the pin as a reviewed decision, not a caret range.
+|===
+
+== Definition of done
+
+A reviewer can check all of these without asking questions:
+
+* `git grep 'listener.server'` returns nothing.
+* `git grep 'HTTP = "1'` returns nothing.
+* `packages/MaridTransport/Project.toml` says `HTTP = "2.11"` and the example's
+  committed manifest resolves within that series.
+* The 38 example assertions pass unedited, plus the six Phase-3 tests.
+* `just test` passes on Julia 1.10 and 1.13.
+* `docs/audits/evidence-ledger.adoc` has a checkpoint naming HTTP.jl and Julia
+  versions, with the commands and counts.
+* `docs/marid-compatibility.adoc` lists HTTP.jl 2.x as the supported transport
+  baseline, and says plainly that SSE/WebSocket/HTTP-2 remain unimplemented.
+
+== What this unlocks, in order
+
+. **SSE server** (`MaridLive` over `MaridTransport`): 2.x has first-class SSE, so
+   `format_sse_event` finally has a transport to be formatted for. Gate: a real
+   browser EventSource receiving replayed and live events, including reconnect
+   with `Last-Event-ID`.
+. **WebSocket upgrade**: needed by the Datastar/Turbo paths that require it.
+  Gate: a real browser, a disconnect test, and a bounded queue per connection.
+. **HTTP/2 and the Phase 8 gRPC decision**: 2.x gives HTTP/2 client *and* server.
+  The brief's gate is a conformance suite plus a standard gRPC client per
+  advertised streaming mode — passing frame/unframe tests is not that (R13).
+. **Client-side retries**: `HTTP.Client` replaces the deleted layer stack, so
+  `MaridArango`'s future HTTP client and the browser-facing test helpers get
+  bounded retries and explicit timeouts from the library instead of by hand.

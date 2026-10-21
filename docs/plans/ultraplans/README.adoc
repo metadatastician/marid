@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= Ultraplans: one chat per target
+
+Each file here is a *self-contained prompt* for one workstream. Paste one file
+into one fresh agent chat; do not merge two into one conversation. The order
+below is the dependency order, and the last file is the synthesis that closes the
+loop back to Marid once the others have landed.
+
+[cols="1,2,2",options="header"]
+|===
+| Order | File | Target
+
+| 1 | `01-estate-ci-locks.adoc`
+| `hyperpolymath/standards` + this repo's `actions.lock` — unblocks six red gates
+| 2 | `02-rsr-template.adoc`
+| `hyperpolymath/rsr-template-repo` — provisioning adoption, gates that cannot
+  fail, template false positives
+| 3 | `03-gateway.adoc`
+| `hyperpolymath/http-capability-gateway` — pin bump, full-suite failures, proxy
+  surface
+| 4 | `04-affinescript.adoc`
+| `hyperpolymath/affinescript` — publish/build story, or an honest descope
+| 5 | `05-marid-transport.adoc`
+| `MaridTransport` — execute `docs/plans/httpjl-2-migration.adoc`
+| 6 | `06-marid-core-ir.adoc`
+| `MaridIR` + `MaridCore` — patches 0003/0008, readiness, CLI entry point
+| 7 | `07-marid-storage.adoc`
+| `MaridArango` + `MaridStorage` — real client or explicit double
+| 8 | `08-marid-adapters.adoc`
+| `MaridOpenAPI` + `MaridGraphQL` + `MaridRPC` — patches 0001/0004/0005 +
+  independent validators
+| 9 | `09-marid-live-web.adoc`
+| `MaridLive` + `web/*` — patch 0007, client reliability, real browser
+| 10 | `10-marid-distributed.adoc`
+| `MaridControl` + `MaridRaft` + `MaridCRDT` — safety first, or removal
+| 11 | `11-marid-synthesis.adoc`
+| Marid as a whole, after 5–10 — arrival pack, evidence ledger, release review
+|===
+
+== How to run one
+
+. Paste the file's content as the *first* message of a new chat.
+. The agent must produce an evidence-first report before code: read the named
+   files, run the named commands, and state what it saw.
+. Every plan ends with an explicit *stop* condition. Honour it: several of these
+   touch published artefacts, signatures, or another repository's `main`.
+. Nothing here authorises a push to another repository's default branch, a
+   package registration, a release, or a deployment. Those stay owner actions.
+
+== Ground rules shared by every plan
+
+* Doctrine: holes before features; fixes first on firm foundations; fail loudly,
+   seal soundly; report faithfully — no overclaim; wire first; solutions at
+   source (fix the canonical origin, not the downstream symptom); elegance by
+   default with departures labelled; stop-first for outward-facing actions.
+* Never equate a mock, a shim, a skipped test or a unit suite with
+   interoperability.
+* If a toolchain is missing, say so and fail closed. Never fabricate a result,
+   a version pin, or an assertion count.
+* Commits carry DCO sign-off and are signed by the owner's key. If you cannot
+   sign, say so in the report and let the owner re-sign; do not silently produce
+   unsigned commits on a protected branch.

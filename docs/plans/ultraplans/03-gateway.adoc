@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Ultraplan 03 — http-capability-gateway: re-validate the pin, face the failing suite
+
+== Your single question
+
+At a current commit, does the gateway still behave the way Marid's CI asserts it
+does, and what in its own failing test suite is real breakage rather than test
+rot?
+
+== Where you are
+
+`hyperpolymath/http-capability-gateway`. Marid pins it at `c67c743` (the merge of
+PR #112, 2026-09-19) and asserts that commit contains the strict-policy
+correction. Upstream `main` is at `0e75341` (2026-10-20), ten commits later:
+#115 (gate on the DEED grammar), #116–#122 (dependency bumps, including Req
+0.7.5), plus an actions-lock regeneration.
+
+== What Marid depends on (do not break these)
+
+* A strict profile with EMPTY `global_verbs` is accepted and denies unmatched
+  routes; a legacy profile with non-empty globals is still accepted.
+* Marid's emitter (`packages/MaridIR/src/capability.jl`) emits DSL v1 YAML:
+  `dsl_version: '1'`, `governance.global_verbs`, `governance.routes` with
+  anchored PCRE `path`, `verbs`, `exposure`, optional `capability`, and a
+  `stealth` block.
+* Marid refuses to emit routes overlapping `/health`, `/ready`, `/metrics` or
+  `/api/v1/minikaran`, and refuses ambiguous route shapes. If the gateway's
+  precedence rules change, say so — the restriction exists because the gateway's
+  regex store is an unordered ETS set.
+
+== The task
+
+1. *Re-run the pinned and current commits side by side.* `mix deps.get` at each,
+   `mix test --seed 1` at each, and record the failure lists verbatim. The last
+   recorded local run at the pinned commit was 12 properties, 263 tests,
+   15 failures; 15 predate #112 and are unchanged by it. Confirm or refute that
+   with today's toolchain.
+2. *Triage the failures into (a) real defects, (b) test rot, (c) environment.*
+   Known shapes from the last run: malformed fuzz-property declarations, a Plug
+   Host-header test, management-route/stealth expectations, shared audit-buffer
+   state. Do not “fix” a failure by loosening the assertion until you have
+   written down which behaviour is correct.
+3. *Decide the dependency advisory question.* Cowboy 2.17.0, Cowlib 2.18.0 and
+   Mint 1.9.3 were flagged; either upgrade and re-validate, or record an
+   explicit, dated, reasoned waiver. A silent `mix.lock` bump is not
+   revalidation.
+4. *Narrow the proxy surface claim.* Marid's deployment doc places this gateway
+   in front of everything. Establish and document, with tests: header
+   normalisation, hop-by-hop handling, body limits and chunked bodies, no
+   redirect following, no automatic retries, upstream timeout, spoofed identity,
+   and which management endpoints are externally reachable. Anything not tested
+   goes in the “not supported” list.
+5. *Produce the Marid-side deliverable:* the highest commit that satisfies
+   Marid's three assertions above plus a green targeted suite, so Marid's pin can
+   move. Record it in Marid's `docs/marid-compatibility.adoc`, not only in a
+   workflow file.
+
+== Acceptance
+
+* Two run logs (pinned, current) with exact Elixir/OTP versions and failure
+  lists; a per-failure verdict.
+* A recommended pin for Marid with the evidence for it, and no claim that the
+  full suite is green if it is not.
+* Documented supported/unsupported proxy behaviours, matching what tests prove.
+
+== Stop conditions
+
+* Do not change the security model to make tests pass (e.g. do not re-introduce
+  public global-verb fallback).
+* Do not enable the inactive plugins that reference unsupported APIs; list them.
+* Do not deploy. No container, TLS or registry work in this plan.
+
+== Report format
+
+Three sections: pinned vs current behaviour, failure triage table, and the Marid
+recommendation with the commands to reproduce it.

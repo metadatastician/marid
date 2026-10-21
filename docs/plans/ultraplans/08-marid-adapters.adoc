@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Ultraplan 08 — adapters: OpenAPI, GraphQL, JSON-RPC
+
+== Your single question
+
+Which of Marid's three adapter packages produce an artefact a *standard client*
+would accept, and what is the smallest change that makes the answer “all three,
+and here is the independent tool that says so”?
+
+== Where you are
+
+`metadatastician/marid`. Read `PROJECT_BRIEF.md` §2 (launch set),
+`docs/plans/patches/{0001,0004,0005}-*.patch`, and
+`docs/audits/recon-2026-10-21.adoc` (C06, C07, C08).
+
+== Confirmed state
+
+* `MaridOpenAPI` built its document by string interpolation: a quote or newline
+  in a description produced invalid JSON; two verbs on one path produced two
+  `"path"` keys; `:id` stayed `:id`; no components, no request bodies, no error
+  responses.
+* `MaridGraphQL` emitted no `Query` type for a mutation-only service (invalid
+  SDL), mapped `Void`/`Bytes`/`UInt64` to `String`, and “introspection” was
+  `occursin("__schema", query)` returning a list of type-name strings.
+* `MaridRPC` returned `"Internal error: <exception text>"` to the client and its
+  `RpcResponse.result` could not hold a scalar or array. No notifications, no
+  batch, no `-32602`.
+
+== The task
+
+1. *Apply patches 0004, 0005 and 0001*, running each suite. Fix patches rather
+   than tests if they conflict.
+2. *Independent validation, which is the actual acceptance criterion:*
+   * OpenAPI: run `openapi-spec-validator` (or `spectral lint`) over
+     `./scripts/marid generate openapi examples/http_json/service.jl` in CI. A
+     spec that merely parses is not validated.
+   * GraphQL: parse the emitted SDL with a maintained parser (e.g. `graphql-core`
+     parse/validate) in CI.
+   * JSON-RPC: drive the dispatcher with a fixture set covering success,
+     method-not-found, invalid-request, internal-error (asserting the message is
+     the fixed string), notification, batch, and id preservation; then, where a
+     transport exists, exercise it over HTTP with a standard client.
+3. *Same descriptor, one artefact each:* every emitter must take exactly one
+   `ServiceDescriptor` and must not consult a hand-written route table. Add a
+   test that binds an app from a descriptor and asserts the emitted paths equal
+   the router's paths.
+4. *Say what is missing.* Update each package docstring and README with an
+   explicit supported/unsupported table. GraphQL has no executor; JSON-RPC has no
+   MCP lifecycle; OpenAPI has no security schemes. Write it down where a reader
+   of the package will see it.
+
+== Acceptance
+
+* CI proves: OpenAPI validated by an independent validator; SDL parsed by an
+  independent parser; RPC fixture matrix green including redaction and
+  notification shape.
+* No emitter output contains an unescaped description, a literal `:param`, or a
+  duplicate path key — each with a negative test.
+* Package docs match behaviour, verified by the same tests.
+
+== Stop conditions
+
+* Do not implement a GraphQL executor or an MCP server in this pass; that is a
+  separate gate with independent-client acceptance.
+* Do not adopt a new library to avoid writing a validator — use an existing tool
+  in CI, not a runtime dependency.
+* Do not claim “conformance” anywhere; claim “validates with tool X at version Y”.
+
+== Report format
+
+Artefact → tool that validated it → command → result. Then the unsupported table
+per package.
