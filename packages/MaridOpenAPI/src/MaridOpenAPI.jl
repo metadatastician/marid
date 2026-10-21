@@ -143,7 +143,12 @@ function emit_openapi_json(svc::ServiceDescriptor)::String
             "description" => svc.description),
         "paths" => paths)
     isempty(schemas) || (document["components"] = Dict{String, Any}("schemas" => schemas))
-    return JSON3.pretty(document)
+    # `JSON3.pretty(x)` writes to stdout and returns `nothing`; it is not a
+    # serialiser that hands back a string. Render into a buffer instead, or the
+    # `::String` return annotation throws and the document lands in the log.
+    buffer = IOBuffer()
+    JSON3.pretty(buffer, document)
+    return String(take!(buffer))
 end
 
 end # module MaridOpenAPI
