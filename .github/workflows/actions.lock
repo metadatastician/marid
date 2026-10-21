@@ -304,13 +304,13 @@ dependencies:
     'ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e':
         ref: 'fa7117db83c52d787ae5a89f350999701505d78e'
         commit: 'sha1-fa7117db83c52d787ae5a89f350999701505d78e'
-        owner_id: 421101922
-        repo_id: 67707773
+        owner_id: 67707773
+        repo_id: 421101922
     'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6':
         ref: '0c5077e51419868618aeaa5fe8019c62421857d6'
         commit: 'sha1-0c5077e51419868618aeaa5fe8019c62421857d6'
-        owner_id: 512644635
-        repo_id: 108928776
+        owner_id: 108928776
+        repo_id: 512644635
     'oven-sh/setup-bun@v2.2.0':
         ref: 'v2.2.0'
         commit: 'sha1-0c5077e51419868618aeaa5fe8019c62421857d6'
