@@ -254,6 +254,11 @@ function _input_type_name(ref::TypeRef)::String
     if ref isa PrimitiveType
         return get(_SCALAR_MAP, ref.name, "String")
     elseif ref isa ObjectType
+        # `ID` is a GraphQL built-in scalar, but it is not a primitive in the
+        # IR, so a descriptor writes it as `ObjectType("ID")`. It must stay
+        # `ID` in an input field: `IDInput` would reference a type that is
+        # never declared.
+        ref.name == "ID" && return "ID"
         return _input_name(ref.name)
     elseif ref isa ListType
         return "[" * _input_type_name(ref.element_type) * "]"

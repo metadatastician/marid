@@ -25,6 +25,9 @@ using MaridGraphQL
     @test occursin("id: ID!", sdl)
     @test occursin("createEntity(input: EntityInput): Entity", sdl)
     @test !occursin("input Entity {", sdl)
+    # `ID` is an ObjectType in the IR but a GraphQL built-in scalar; inside the
+    # input object it must stay `ID`, never `IDInput` (which is never declared).
+    @test !occursin("IDInput", sdl)
 
     res = execute_graphql_query("{ __schema { queryType { name } } }", svc)
     @test haskey(res, "data")
@@ -90,7 +93,9 @@ end
     @test length(declared) == length(unique(declared))
     @test "Node" in declared
     @test "NodeInput" in declared
-    @test !("Node" in [m.captures[2] for m in eachmatch(r"^scalar\s+([A-Za-z_][A-Za-z0-9_]*)"m, sdl)])
+    # One capture group in this pattern, so it is `captures[1]` — indexing [2]
+    # is a BoundsError, not a comparison.
+    @test !("Node" in [String(m.captures[1]) for m in eachmatch(r"^scalar\s+([A-Za-z_][A-Za-z0-9_]*)"m, sdl)])
 
     # Nested object references inside an input must point at the input twin, or
     # the reference dangles: an input field cannot be an output object type.
