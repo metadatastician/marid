@@ -24,6 +24,30 @@ using MaridCore
         @test status_code(timeout) == 504
     end
 
+    # 1b. Stable problem-detail identifiers (C10)
+    @testset "Problem details identify the kind, stably" begin
+        pd = problem_details(NotFoundError("Taxon", "42"))
+        # Not "…/errors/MaridCore.NotFoundError": the type is a stable slug.
+        @test pd["type"] == "https://marid.hyperpolymath.org/problems/not-found"
+        @test pd["title"] == "Not Found"
+        @test pd["instance"] == "/problems/not-found"
+        @test pd["status"] == 404
+        @test occursin("42", pd["detail"])
+
+        @test error_slug(ValidationError("bad", "email", "required")) == "validation"
+        @test problem_details(UnauthorizedError())["title"] == "Unauthorized"
+        @test problem_details(ConflictError("c", "r", "v"))["status"] == 409
+        @test problem_details(TimeoutError("t", 1.0))["status"] == 504
+
+        # Unknown subclasses still map to a sane slug rather than throwing.
+        @test error_slug(InternalError("boom")) == "internal"
+
+        # A trace id travels with the problem, as an extension member.
+        traced = problem_details(InternalError("safe"), trace_id="abc-123")
+        @test traced["trace_id"] == "abc-123"
+        @test occursin("safe", traced["detail"])
+    end
+
     # 2. CallContext Lifecycle & Cancellation
     @testset "CallContext Semantics" begin
         ctx = create_context(principal="user:dr_smith", tenant="biology_dept", timeout_ms=500)
