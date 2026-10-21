@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: MPL-2.0
+# TEMPORARY diagnostic: surfaces failure text through check-run annotations,
+# because this sandbox cannot reach the job-log host. Delete before merging.
+name: diag
+on:
+  push:
+    branches: ['arena/a2a92b6f-marid']
+permissions:
+  contents: read
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [MaridOpenAPI, MaridLive]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: julia-actions/setup-julia@v3.0.2
+        with:
+          version: '1.10'
+      - name: probe ${{ matrix.package }}
+        run: |
+          set +e
+          julia --startup-file=no scripts/bootstrap.jl packages/${{ matrix.package }} > /tmp/boot.log 2>&1
+          rc1=$?
+          julia --startup-file=no --project=packages/${{ matrix.package }} packages/${{ matrix.package }}/test/runtests.jl > /tmp/test.log 2>&1
+          rc2=$?
+          echo "bootstrap rc=$rc1 test rc=$rc2"
+          emit() {
+            local title="$1"; local body
+            body=$(tail -c 3500 "$2" | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=${title}::${body}"
+          }
+          [ $rc1 -ne 0 ] && emit "${{ matrix.package }} bootstrap rc=$rc1" /tmp/boot.log
+          [ $rc2 -ne 0 ] && emit "${{ matrix.package }} test rc=$rc2" /tmp/test.log
+          [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && echo "::notice::${{ matrix.package }} passed in isolation"
+          exit 0
