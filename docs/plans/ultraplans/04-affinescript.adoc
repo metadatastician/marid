@@ -33,10 +33,15 @@ downloads a pinned, SHA-256-verified native binary)”.
    state: can an unrelated repository compile a `.affine` file to Wasm and to a
    Bun-importable ES module using only documented, pinned steps? Record every
    step that needed tribal knowledge.
-2. *If yes:* publish the distribution the docs promise — a release artefact with
-   a SHA-256, or an npm package — and add a *consumer* test: a fixture repository
-   (or a job inside affinescript) that installs the published artefact and
-   compiles one file. Document the pinning.
+2. *If yes:* prepare the distribution the docs promise — and note the
+   conflict this plan has to respect: publishing is a stop condition without
+   owner approval, so acceptance cannot *require* it. Owner approval is an
+   explicit prerequisite. With it, publish a release artefact with a SHA-256 (or
+   an npm package) and add a *consumer* test: a fixture repository (or a job
+   inside affinescript) that installs the artefact and compiles one file.
+   Without it, acceptance is the *prepared and tested* artefact: a reproducible
+   build, a candidate tag, and the consumer test run against the local tarball.
+   Document the pinning either way.
 3. *If no:* write the honest status paragraph for consumers — “not consumable
    outside the source tree; use the OCaml toolchain or wait” — and open, in
    `standards`, a one-page consumer guidance note so the estate stops writing

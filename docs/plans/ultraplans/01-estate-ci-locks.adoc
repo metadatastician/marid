@@ -54,9 +54,13 @@ From the standards side:
    “fix” it by
    removing `actions-lock` from CI.
 3. *Make the failure legible.* A `Set up job` failure names no step and tells a
-   maintainer nothing about which workflow needs which tool version. Add a
-   preflight in the reusable workflow that prints the required `gh-actions-lock`
-   version and the schema it expects before resolving.
+   maintainer nothing about which workflow needs which tool version. Note the
+   constraint: the failure occurs during job setup, so a preflight *step inside
+   the reusable workflow* cannot run and cannot print anything — it is never
+   reached. The diagnostic must live outside it: a separate preflight job in the
+   consumer that does not depend on the reusable workflow (or the resolver
+   reporting its requirement before job setup). Prove it by showing the message
+   a maintainer actually sees.
 4. *Publish the consumer procedure* in standards: exact commands to regenerate
    (`gh actions-lock …`), what to do when a tag has moved, and why the lock is
    never hand-edited.

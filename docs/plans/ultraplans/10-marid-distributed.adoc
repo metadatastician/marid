@@ -51,9 +51,16 @@ available, and which should be explicitly removed or frozen?
    budget before it starts. The elegant default today is (a) plus a written
    argument for why etcd/Consul remains sufficient.
 4. *MaridCRDT:* implement OR-Set properly (tag sets; removal requires having
-   observed the tag) or rename and document the clock assumption. Add property
-   tests: commutativity, associativity, idempotence of merge, convergence under
-   random merge orders, and a partition simulator with random schedules.
+   observed the tag) or rename and document the clock assumption. The
+   acceptance differs by branch and must not be shared:
+   * *Observed-tag branch:* property tests for commutativity, associativity,
+     idempotence of merge, convergence under random merge orders, and a
+     partition simulator with random schedules.
+   * *Clock-based branch:* those properties do not prove the thing that
+     matters — that a removal cannot be resurrected under clock skew. Mark the
+     implementation explicitly non-safe and non-deployable, keep it out of any
+     assembly path, and state the assumption in the module docstring. It does
+     not earn the convergence gate above.
 5. *Nothing in this pass may be wired into `MaridApp`, the example, or any
    deployment.* These are optional control-plane features; the data plane must
    not depend on them.

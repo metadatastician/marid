@@ -45,10 +45,14 @@ current client silently get wrong?
    * assert the reconnect path with a `ReadableStream` stub that closes cleanly,
      then with one that errors, then with one that returns 401 once.
 3. *Server side:* the SSE endpoint does not exist yet (the transport is unary
-   JSON). Do not fake it in the browser client. If
-   `docs/plans/ultraplans/05-marid-transport.adoc` has landed, add the smallest
-   real SSE endpoint to `examples/http_json` using `MaridTransport.format_sse_event`
-   and MaridLive helpers, with sequence numbers and `Last-Event-ID` replay.
+   JSON). Do not fake it in the browser client. *Ultraplan 05 is a hard
+   prerequisite for step 4, not an optional step:* without a real endpoint there
+   is no stream to receive or resume, so the browser acceptance cannot run.
+   Once 05 has landed, add the smallest real SSE endpoint to
+   `examples/http_json` using `MaridTransport.format_sse_event` and the MaridLive
+   helpers, with sequence numbers and `Last-Event-ID` replay. If 05 has not
+   landed, the honest result is *blocked on 05* — record that, and do not
+   substitute a stub for the acceptance.
 4. *Real browser evidence, which is the only acceptance that counts here:* one
    Playwright (or equivalent) test against Chromium, Firefox and WebKit that
    loads a page using the Custom Element, receives an event, sees the DOM change,

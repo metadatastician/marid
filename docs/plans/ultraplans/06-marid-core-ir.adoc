@@ -60,7 +60,11 @@ say — and what closes that?
 
 == Acceptance
 
-* `from_dict(to_dict(svc)) == svc` for a fixture with all five `TypeRef` kinds.
+* Round-trip proven on *bytes* for a fixture with all five `TypeRef` kinds:
+  `to_dict(from_dict(to_dict(svc)))` re-serialises to the same canonical JSON
+  text as the original. Object equality alone does not establish this — two
+  dictionaries can compare equal and still serialise differently, and the
+  serialised form is what other tools consume.
 * Socket test: not-ready → 503; draining → 503 for new requests; in-flight
   completes; shutdown flags correct afterwards.
 * `marid generate` exits non-zero, with a diagnostic and empty stdout, for an

@@ -252,7 +252,7 @@ what unlocks SSE, WebSocket and HTTP/2 — three things the charter needs anyway
 
 | R16 generator stubs / doc drift
 | *Partly closed, with a new silent-success mode.*
-| `generate proto|openapi|graphql` now call real emitters but fall back to an
+| `generate proto\|openapi\|graphql` now call real emitters but fall back to an
   empty descriptor on any failure (C16). `routes` is implemented.
 |===
 
@@ -1010,8 +1010,11 @@ transport until SSE work begins” — that is a defensible choice, but say so i
 
 [source,bash]
 ----
-# What ran here (no Julia in this sandbox)
-export PATH="$HOME/.cache/npmg/bin:$PATH"     # just 1.59.0, bun 1.4.3, asciidoctor
+# What ran here (no Julia in this sandbox; no release binaries reachable)
+export PATH="$HOME/.cache/npmg/bin:$PATH"     # just 1.59.0, bun 1.4.3
+# asciidoctor was NOT present initially. It was installed from npm part-way
+# through the audit, and every render check below was run after that install;
+# any check run before it is marked "not run", never "clean".
 just validate && just validate-repo-map && just validate-coapt
 bash scripts/check-root-shape.sh
 bash scripts/check-no-md-in-docs.sh
@@ -1032,7 +1035,7 @@ julia --startup-file=no scripts/bootstrap.jl packages/MaridControl
 julia --startup-file=no --project=packages/MaridControl -e \
   'using MaridControl; swap_snapshot!(AtomicConfig(), Snapshot(1))'   # C03
 julia --startup-file=no --project=packages/MaridIR -e \
-  'using MaridIR; from_dict'                                          # C14
+  'using MaridIR; :from_dict in names(MaridIR)'                       # C14 (must be false)
 julia --startup-file=no --project=packages/MaridRaft -e \
   'using MaridRaft; step_clock!'                                      # C13
 ----

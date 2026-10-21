@@ -67,6 +67,11 @@ workstream has not landed, you record it as *not landed* — you do not skip it.
 
 * `git grep 'maturity production'` returns nothing; `CLAUDE.md`'s state line
   matches the deed and the ledger.
+* The generator *fails* when asked for a field the deed does not declare:
+  a fixture deed missing (say) `phase`, with the pack still requesting it,
+  produces a non-zero exit and a diagnostic naming the field. Asserting only
+  the generated text proves the happy path and would let the silent defaulting
+  this task removes come straight back.
 * `just quality` fails when it should (demonstrated) and passes when it should.
 * One status record; every other status document either derives from it or links
   to it.

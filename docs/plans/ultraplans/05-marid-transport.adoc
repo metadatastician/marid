@@ -19,9 +19,11 @@ names.
 * `packages/MaridTransport/Project.toml` and `examples/http_json/Project.toml`
   pin `HTTP = "1.10"`; the committed example manifest resolves HTTP 1.11.0.
 * HTTP.jl v2.0.0 (2026-05-28) is a Reseau-backed rewrite; 2.11.1 is current.
-  2.x removes the 1.x internals, renames `status_code` → `status`, replaces the
-  client layer stack with `HTTP.Client`/`HTTP.Transport`, and moves WebSockets
-  under `HTTP.WebSockets`.
+  2.x removes the 1.x internals, *prefers* `status` over `status_code`
+  (`resp.status_code` survives as a compatibility alias — prefer the new name,
+  do not describe the old one as deleted), replaces the client layer stack with
+  `HTTP.Client`/`HTTP.Transport`, and moves WebSockets under
+  `HTTP.WebSockets`.
 * `listening_port` reads `server.listener.server` — a 1.x internal.
 * The acceptance test is `examples/http_json/test/runtests.jl` (38 assertions,
   real sockets, curl and a raw chunked request). It must pass *unedited* except

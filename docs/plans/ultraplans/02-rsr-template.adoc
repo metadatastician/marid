@@ -53,12 +53,16 @@ it, so every defect here is multiplied by the estate.
    It must be idempotent and must fail loudly rather than half-migrate.
 5. *Add a minted-repo smoke test to the template's own CI:* mint a throwaway
    repository from the template in a temp directory, then run `just validate`,
-   `just quality` and `just verify-template` inside it. Expect green. Today no
-   such test exists, which is why three of the above shipped.
+   `just test`, `just quality` and `just verify-template` inside it. Expect
+   green. `just test` is included deliberately: this plan exists because gates
+   here cannot fail, and a smoke test that skipped the test gate would let the
+   same defect through. Today no such test exists, which is why three of the
+   above shipped.
 
 == Acceptance
 
-* A fresh mint runs `just validate`, `just quality`, `just verify-template` green.
+* A fresh mint runs `just validate`, `just test`, `just quality`,
+  `just verify-template` green.
 * A *stale* mint (Marid's shape: `.deed` only, stub Justfile) fails with
   actionable messages and is fixable by the migration verb.
 * `verify.sh` fails when the generated region is edited by hand — prove it by

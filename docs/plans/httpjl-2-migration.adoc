@@ -79,8 +79,11 @@ After migration, `MaridTransport` must satisfy all of:
 . Interrupts (`InterruptException`) propagate out of a handler instead of being
   converted to a 500 by the blanket `catch` (`C12`).
 . Handler-supplied response headers never produce a duplicate `Content-Length`.
-. The package's `[compat]` entry is `HTTP = "2.11"` (not `"2"`: pin the minor so
-  a future 2.x cannot change the streaming contract silently), the example
+. The package's `[compat]` entry is `HTTP = "~2.11"` — a *tilde*, not the
+  default caret. Julia's `"2.11"` means `>=2.11.0, <3.0.0`, which admits every
+  later 2.x; since the point here is that a future 2.x must not change the
+  streaming contract silently, the minor has to be pinned explicitly
+  (`~2.11` = `>=2.11.0, <2.12.0`, or an explicit `<2.12` bound). The example
   manifest is regenerated, and `julia-ci.yml` runs both LTS Julia and current
   Julia against it.
 . CI additionally runs the *matrix on 1.10 and 1.13*, because “the transport
@@ -123,10 +126,30 @@ catch e println("1.x path gone: ", e) end
 
 # Q3. What does the handler-visible request look like, and can I read a bounded
 #     body without buffering the whole thing?
+#     PROBE (must print a result, not a comment): install a handler that reads
+#     at most N bytes of a larger body and records the request's public fields;
+#     print the field names and whether the read was bounded.
+try
+    stages = HTTP.Servers.listen! # placeholder: replace with the 2.x read API
+    println("Q3 probe: fill in against the installed 2.x API; see the note below")
+catch e
+    println("Q3 probe failed: ", e)
+end
 # Q4. What happens to the connection when a handler returns without reading the
 #     body (the 413 path in `_read_request`)? Two requests on one socket.
+#     PROBE: send two pipelined requests to a handler that never reads the body
+#     of the first; print whether the second got a response, and on which
+#     connection.
+println("Q4 probe: fill in — send request 1 with an unread body, then request 2")
 # Q5. Does `HTTP.request(...; status_exception=false, retry=false)` still exist
 #     with those keywords, or is it `HTTP.Client` now?
+#     PROBE: call it and print the method or the error; do not assume from docs.
+try
+    println("Q5 keywords accepted: ", HTTP.request("http://127.0.0.1:1/";
+            status_exception=false, retry=false) |> typeof)
+catch e
+    println("Q5 failed (expected against a closed port): ", typeof(e))
+end
 
 close(server)
 ----
@@ -286,10 +309,14 @@ differ between HTTP stacks and none of them is covered today:
 
 A reviewer can check all of these without asking questions:
 
-* `git grep 'listener.server'` returns nothing.
-* `git grep 'HTTP = "1'` returns nothing.
-* `packages/MaridTransport/Project.toml` says `HTTP = "2.11"` and the example's
-  committed manifest resolves within that series.
+* `git grep 'listener.server' -- packages examples` returns nothing.
+* `git grep -E '^HTTP = "1' -- packages examples` returns nothing.
+  Both are scoped to the shipped sources: an unscoped grep also matches the
+  historical snippets and the checks *in this plan*, so it would fail after a
+  successful migration and tell a reviewer nothing.
+* `packages/MaridTransport/Project.toml` says `HTTP = "~2.11"` (tilde: caret
+  semantics would admit all of 2.x) and the example's committed manifest
+  resolves within that series.
 * The 38 example assertions pass unedited, plus the six Phase-3 tests.
 * `just test` passes on Julia 1.10 and 1.13.
 * `docs/audits/evidence-ledger.adoc` has a checkpoint naming HTTP.jl and Julia

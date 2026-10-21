@@ -37,9 +37,12 @@ and here is the independent tool that says so”?
    * GraphQL: parse the emitted SDL with a maintained parser (e.g. `graphql-core`
      parse/validate) in CI.
    * JSON-RPC: drive the dispatcher with a fixture set covering success,
-     method-not-found, invalid-request, internal-error (asserting the message is
-     the fixed string), notification, batch, and id preservation; then, where a
-     transport exists, exercise it over HTTP with a standard client.
+     method-not-found, invalid-request, *invalid-params* (`-32602` — the module
+     does not currently emit it at all, and a suite without this case passes
+     while bad arguments return the wrong code), internal-error (asserting the
+     message is the fixed string), notification, batch, and id preservation;
+     then, where a transport exists, exercise it over HTTP with a standard
+     client.
 3. *Same descriptor, one artefact each:* every emitter must take exactly one
    `ServiceDescriptor` and must not consult a hand-written route table. Add a
    test that binds an app from a descriptor and asserts the emitted paths equal
@@ -51,11 +54,18 @@ and here is the independent tool that says so”?
 
 == Acceptance
 
-* CI proves: OpenAPI validated by an independent validator; SDL parsed by an
-  independent parser; RPC fixture matrix green including redaction and
+* CI proves: OpenAPI validated by an independent validator; SDL *validated as a
+  schema*, not merely parsed — parsing only proves syntax, and the defect being
+  fixed is semantic (a mutation-only service with no valid `Query` root parses
+  happily), so the mutation-only fixture must be shown to have a valid query
+  root; RPC fixture matrix green including redaction, `-32602`, and
   notification shape.
-* No emitter output contains an unescaped description, a literal `:param`, or a
-  duplicate path key — each with a negative test.
+* No emitter output contains an unescaped description, a leftover colon
+  placeholder, or a duplicate path key — each with a negative test. The
+  placeholder test must assert against the concrete placeholders the descriptor
+  uses (`:id`, `:slug`), not a generic `:param`: a document still containing
+  `:id` passed a test that only forbade the literal string `:param`, which is
+  how the original defect survived.
 * Package docs match behaviour, verified by the same tests.
 
 == Stop conditions
