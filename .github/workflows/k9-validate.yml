@@ -75,15 +75,19 @@ jobs:
 
   # The DEED–K9 conformance matrix, one row per category the lane checks.
   #
-  # Advisory on purpose, and with an explicit expiry: marid's 18 contracts have
-  # never been run through the strict L0–L2 validator this lane uses, so the
-  # first grid may legitimately be red on pre-existing debt. A lane that reds
-  # every pull request on day one is a lane somebody disables. Removal
-  # condition: delete `continue-on-error` once a run on `main` renders green
-  # or yellow, and let it gate from then on.
+  # This is a gate, and it has to be. A job that calls a reusable workflow may
+  # carry only name/uses/with/secrets/strategy/needs/if/permissions/
+  # concurrency -- `continue-on-error` is not among them, and adding it makes
+  # GitHub refuse the whole workflow at startup with zero jobs created. So
+  # there is no "advisory" form of this lane, and pretending otherwise would
+  # silently delete the check rather than soften it.
+  #
+  # If the first run is red on pre-existing debt, the lane's own remedy is the
+  # shrink-only ledger `.machine_readable/k9-contract-debt.txt`, which makes a
+  # recorded entry non-blocking and ratchets it down. Disabling the lane is not
+  # a remedy.
   k9-grid:
     name: "🟡 CHECK: DEED–K9 conformance grid"
-    continue-on-error: true
     permissions:
       contents: read
       pull-requests: read

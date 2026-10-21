@@ -92,12 +92,23 @@ baseline, and a forged baseline is how a regression renders as an improvement.
 * *Hypatia grid — report only.* It never gates. Gating on findings is
   `block-on-high` on the scan job, which stays at its default (`false`), so
   this change does not alter what blocks a merge.
-* *DEED–K9 grid — advisory, with a removal condition.* The job carries
-  `continue-on-error: true`. marid's 18 contracts have never been run through
-  the strict L0–L2 validator this lane uses, so the first grid may legitimately
-  be red on pre-existing debt. *Remove `continue-on-error` once a run on `main`
-  renders green or yellow, and let the grid gate from then on.* Until that day
-  the grid is evidence on the pull request, not a gate.
+* *DEED–K9 grid — a gate. It cannot be anything else.* A job that calls a
+  reusable workflow may carry only `name`, `uses`, `with`, `secrets`,
+  `strategy`, `needs`, `if`, `permissions` and `concurrency`.
+  `continue-on-error` is not among them: adding it makes GitHub refuse the
+  whole workflow at startup, with zero jobs created and no useful error. So
+  there is no advisory form of this lane, and the attempt to make one deleted
+  the check outright rather than softening it.
+  +
+  If the first run is red on pre-existing debt, the lane's own remedy is the
+  shrink-only ledger `.machine_readable/k9-contract-debt.txt`, where a recorded
+  entry is non-blocking and ratchets down. A new entry is an exemption only
+  when the commit message or PR body includes
+  `Ratchet-exception: .machine_readable/k9-contract-debt.txt — reason` (or the
+  equivalent parenthesised form). Without it, the new entry exempts nothing.
+  Disabling the lane is not a remedy,
+  and `fail-on-indeterminate` stays `false` so missing evidence does not fail
+  the job on top of it.
 
 === The fleet rows are deliberately absent
 

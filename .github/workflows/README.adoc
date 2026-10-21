@@ -73,6 +73,8 @@ The families share orange and grey and nothing else, and the spec forbids
 mixing them in one row.
 
 Do not merge the two posting jobs, and do not collapse the comments into one.
-The DEED–K9 grid is advisory until a run on `main` renders green or yellow; the
-Hypatia grid is report-only. `docs/practice/PR-VERDICT-GRIDS.adoc` holds the
-detail, including the removal condition on the advisory job.
+The DEED–K9 grid is a gate; the Hypatia grid is report-only. The K9 lane cannot
+be made advisory even if you want it to be — a job that calls a reusable
+workflow may not carry `continue-on-error`, and adding it makes GitHub refuse
+the whole workflow at startup with zero jobs. `docs/practice/PR-VERDICT-GRIDS.adoc`
+holds the detail.
