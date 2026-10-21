@@ -1,5 +1,5 @@
 diff --git a/packages/MaridStorage/src/MaridStorage.jl b/packages/MaridStorage/src/MaridStorage.jl
-index 5eea5f8..47f9cb4 100644
+index 5eea5f8..d0acc07 100644
 --- a/packages/MaridStorage/src/MaridStorage.jl
 +++ b/packages/MaridStorage/src/MaridStorage.jl
 @@ -4,15 +4,23 @@
@@ -29,25 +29,43 @@ index 5eea5f8..47f9cb4 100644
         put_entity!, get_entity, delete_entity!, query_entities
  
  abstract type StorageEngine end
-@@ -32,7 +40,11 @@ end
+@@ -25,14 +33,27 @@ InMemoryEngine() = InMemoryEngine(Dict{String, Dict{String, Any}}())
+ 
+ function put_entity!(engine::InMemoryEngine, collection::String, id::String, data::Dict{String, Any})
+     key = "$collection/$id"
+-    engine.records[key] = copy(data)
++    # `deepcopy` on write AND on read. A shallow `copy` copies only the top
++    # level: a caller who kept a reference to a nested Dict or Vector could
++    # mutate the stored record after the write, and a caller who received one
++    # could mutate it without going through put_entity!. Nested values are the
++    # common case here (a clade's children, a node's tags), so the shallow
++    # version did not deliver the isolation the comment claimed
++    # (recon-2026-10-21, P14).
++    engine.records[key] = deepcopy(data)
+     engine.records[key]["_id"] = key
+-    return engine.records[key]
++    # Return a copy, not the stored dictionary: returning the internal object
++    # would hand every caller a writable handle on the engine's state.
++    return deepcopy(engine.records[key])
+ end
  
  function get_entity(engine::InMemoryEngine, collection::String, id::String)
      key = "$collection/$id"
 -    return get(engine.records, key, nothing)
 +    record = get(engine.records, key, nothing)
-+    # Copy on read: handing out the stored dictionary let a caller mutate the
-+    # store without going through put_entity!, and made "engine" semantics a lie
-+    # (recon-2026-10-21, P14).
-+    return record === nothing ? nothing : copy(record)
++    # Deep copy on read: handing out the stored dictionary let a caller mutate
++    # the store without going through put_entity!, and made "engine" semantics a
++    # lie (recon-2026-10-21, P14). Shallow `copy` only protected the top level.
++    return record === nothing ? nothing : deepcopy(record)
  end
  
  function delete_entity!(engine::InMemoryEngine, collection::String, id::String)
-@@ -45,35 +57,72 @@ function query_entities(engine::InMemoryEngine, collection::String; filter_fn::F
+@@ -45,35 +66,83 @@ function query_entities(engine::InMemoryEngine, collection::String; filter_fn::F
      results = Dict{String, Any}[]
      for (k, v) in engine.records
          if startswith(k, prefix) && filter_fn(v)
 -            push!(results, v)
-+            push!(results, copy(v))
++            push!(results, deepcopy(v))
          end
      end
      return results
@@ -89,7 +107,18 @@ index 5eea5f8..47f9cb4 100644
 +ArangoStorageEngine(endpoint::String="http://127.0.0.1:8529", database::String="_system"; mock::Bool=false) =
 +    ArangoStorageEngine(endpoint, database, InMemoryEngine(), mock)
 +
-+"True only for an explicitly constructed test double."
++"""
++    is_mock(engine::StorageEngine) -> Bool
++
++True for an engine that exists only to stand in for a real backend.
++
++Defined on the abstract type so a caller holding a generic `StorageEngine` can
++ask the question without dispatching on a concrete type and hitting a
++`MethodError`. `InMemoryEngine` is documented as test storage, so it answers
++`true`; `ArangoStorageEngine` answers its `mock` flag, because a
++non-mock Arango engine is intended (though not yet able) to be real.
++"""
++is_mock(::StorageEngine)::Bool = true
 +is_mock(engine::ArangoStorageEngine)::Bool = engine.mock
 +
 +function _require_mock(engine::ArangoStorageEngine, operation::AbstractString)
@@ -120,10 +149,10 @@ index 5eea5f8..47f9cb4 100644
  end
  
 diff --git a/packages/MaridStorage/test/runtests.jl b/packages/MaridStorage/test/runtests.jl
-index a857346..4741089 100644
+index a857346..2945fdc 100644
 --- a/packages/MaridStorage/test/runtests.jl
 +++ b/packages/MaridStorage/test/runtests.jl
-@@ -10,32 +10,66 @@ using MaridStorage
+@@ -10,32 +10,104 @@ using MaridStorage
          storage = InMemoryEngine()
          data = Dict{String, Any}("name" => "Clade A", "support" => 0.98)
          put_entity!(storage, "nodes", "1", data)
@@ -165,6 +194,38 @@ index a857346..4741089 100644
 +        @test get_entity(storage, "nodes", "1")["name"] == "Original"
 +    end
 +
++    # 1c. The copy is DEEP: nested values are the case that matters (P14)
++    @testset "InMemoryEngine isolates nested values" begin
++        storage = InMemoryEngine()
++
++        # A caller who keeps a reference to nested data must not be able to
++        # change the store after the write.
++        payload = Dict{String, Any}("name" => "Clade", "tags" => ["a"], "meta" => Dict{String, Any}("n" => 1))
++        put_entity!(storage, "nodes", "1", payload)
++        push!(payload["tags"], "smuggled-after-write")
++        payload["meta"]["n"] = 99
++        @test get_entity(storage, "nodes", "1")["tags"] == ["a"]
++        @test get_entity(storage, "nodes", "1")["meta"]["n"] == 1
++
++        # A caller who mutates a nested value of a read result must not change
++        # the store either. Shallow `copy` failed this.
++        got = get_entity(storage, "nodes", "1")
++        push!(got["tags"], "smuggled-after-read")
++        got["meta"]["n"] = 42
++        @test get_entity(storage, "nodes", "1")["tags"] == ["a"]
++        @test get_entity(storage, "nodes", "1")["meta"]["n"] == 1
++
++        # Same via query_entities.
++        listed = query_entities(storage, "nodes")[1]
++        push!(listed["tags"], "smuggled-via-query")
++        @test get_entity(storage, "nodes", "1")["tags"] == ["a"]
++
++        # And put_entity! must not return a writable handle on the store.
++        returned = put_entity!(storage, "nodes", "2", Dict{String, Any}("tags" => ["b"]))
++        push!(returned["tags"], "smuggled-via-return")
++        @test get_entity(storage, "nodes", "2")["tags"] == ["b"]
++    end
++
 +    # 2. The Arango seam refuses to pretend (C05)
 +    @testset "ArangoStorageEngine is not silently in-memory" begin
 +        # Default construction is NOT a working backend: every operation throws
@@ -194,6 +255,12 @@ index a857346..4741089 100644
 +        # The explicit test double still works, and says so.
 +        double = ArangoStorageEngine("http://127.0.0.1:8529", "biomodel_test"; mock=true)
 +        @test is_mock(double)
++
++        # `is_mock` is exported, so it must answer for every engine rather than
++        # throwing a MethodError on the ones without their own method.
++        @test is_mock(InMemoryEngine()) == true
++        @test is_mock(double) == true
++        @test is_mock(arango_storage) == false
 +        put_entity!(double, "edges", "e1",
 +            Dict{String, Any}("_from" => "nodes/1", "_to" => "nodes/2", "weight" => 0.99))
 +        e = get_entity(double, "edges", "e1")

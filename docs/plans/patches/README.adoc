@@ -8,19 +8,58 @@ to review on its own, touches exactly one package (source + its test suite, plus
 `Project.toml` where a dependency is added), and adds the test that would have
 caught the defect.
 
-[WARNING]
+[IMPORTANT]
 ====
-*These patches are UNVERIFIED in the sense that matters.* They were written in an
-environment with no Julia runtime (`julialang-s3.julialang.org` and
-`release-assets.githubusercontent.com` were unreachable), so *no suite has been
-run against them*. What WAS verified: every patch applies cleanly to `3a417df` +
-the accompanying commit (`git apply --check`, all eight, in order), every file
-is syntactically well-formed to the limit of static reading, and each claim about
-the *old* behaviour cites the line it replaces.
+*Status: applied and verified.* These patches were written where no Julia runtime
+could be obtained, and the first version of this file said exactly that: unrun,
+and therefore unproven. That is no longer the state.
 
-The first task for whoever applies them is `just test` — and if any patch fails
-its own new test, the patch is wrong and must be fixed, not the test.
+They were then applied one per commit on this branch and executed by
+`julia-ci.yml` (13 packages × Julia 1.10/1.11, plus `examples/http_json` and the
+CLI job): *28/28 jobs green*. That run found two defects that reading had not —
+`JSON3.pretty` writes to `stdout` and returns `nothing`, so the OpenAPI emitter
+threw on every call; and Julia interpolates `$` inside a docstring, so quoting
+`"\"$k\": \"$v\""` in MaridLive's module docstring broke precompilation. Both
+are fixed. A review round then found more, listed under "Review corrections"
+below.
+
+The files here are *regenerated* from the landed commits:
+
+[source,bash]
+----
+git diff --binary 3a417df HEAD -- packages/<Package> > docs/plans/patches/<name>.patch
+----
+
+so applying all eight, in order, to a clean `3a417df` reproduces `packages/`
+exactly. That was checked by diffing the result against the branch, not assumed.
+They are kept as reviewable units and as a record of what changed and why; the
+commits are the source of truth.
 ====
+
+== Review corrections (second round)
+
+The applied patches drew a review, and the findings were acted on rather than
+resolved away. The ones with teeth:
+
+* `copy` is shallow — nested `Dict`/`Vector` values were still shared between
+  store and caller on both read and write, and `put_entity!` returned the
+  internal dictionary. Now `deepcopy` both ways, returning a copy, with tests
+  for all four mutation paths.
+* GraphQL declared object types as `scalar` (one namespace, so a collision),
+  emitted a fieldless `input Entity` alongside `type Entity`, and produced
+  `Void!` for a scalar documented as always null. Inputs are now
+  `<Name>Input` with real fields and transitive closure.
+* SSE helpers interpolated `event_name` and `selector` into field lines, which
+  is event injection; and a lone CR was deleted rather than treated as a line
+  break, joining `a\rb` into `ab`.
+* `swap_snapshot!` used compare-and-swap in a design that invites concurrent
+  writers, so it could throw. An unconditional atomic store cannot.
+* `HTTP = "2.11"` is caret semantics (`>=2.11.0, <3.0.0`) and does not pin the
+  minor it claims to; the plan now says `~2.11`.
+
+Eight of the findings were rejected, with reasons recorded on the threads: they
+asked for `MPL-2.0` on `.adoc` files, whereas `REUSE.toml` maps documentation to
+`CC-BY-SA-4.0` and that is the repository's own rule.
 
 == Apply order and what each fixes
 

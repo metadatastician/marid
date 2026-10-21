@@ -1,8 +1,8 @@
 diff --git a/packages/MaridRPC/src/MaridRPC.jl b/packages/MaridRPC/src/MaridRPC.jl
-index 8ca7b16..43ccafb 100644
+index 8ca7b16..a285e7c 100644
 --- a/packages/MaridRPC/src/MaridRPC.jl
 +++ b/packages/MaridRPC/src/MaridRPC.jl
-@@ -4,7 +4,15 @@
+@@ -4,7 +4,20 @@
  """
      MaridRPC
  
@@ -10,16 +10,21 @@ index 8ca7b16..43ccafb 100644
 +JSON-RPC 2.0 bindings for Marid.
 +
 +Scope and limits, stated up front so they cannot be mistaken for protocol
-+support: this is in-process request/response dispatch. It implements the single
-+request form (success, method-not-found, invalid-request, internal-error) and
-+NOTIFICATION bodies are not handled; batching is not implemented; there is no
-+transport, no MCP lifecycle and no independent client interoperating with it.
++support. This is in-process request/response dispatch: one request at a time,
++against a registry of handlers.
++
++What it does: the single request form, with success, method-not-found,
++invalid-request and internal-error outcomes.
++
++What it does NOT do: notification bodies are not handled, batching is not
++implemented, and there is no transport, no MCP lifecycle and no independent
++client interoperating with it.
 +`PROJECT_BRIEF.md` §2 and `docs/audits/recon-2026-10-21.adoc` (C06) record that
 +gap; do not describe this module as JSON-RPC conformance.
  """
  module MaridRPC
  
-@@ -22,25 +30,46 @@ end
+@@ -22,25 +35,46 @@ end
  
  struct RpcResponse
      jsonrpc::String
@@ -78,10 +83,10 @@ index 8ca7b16..43ccafb 100644
  
  end # module MaridRPC
 diff --git a/packages/MaridRPC/test/runtests.jl b/packages/MaridRPC/test/runtests.jl
-index 78126f3..42459a4 100644
+index 78126f3..f751bbc 100644
 --- a/packages/MaridRPC/test/runtests.jl
 +++ b/packages/MaridRPC/test/runtests.jl
-@@ -8,17 +8,51 @@ using MaridRPC
+@@ -8,17 +8,60 @@ using MaridRPC
      registry = Dict{String, Function}(
          "ping" => params -> Dict{String, Any}("pong" => true)
      )
@@ -109,15 +114,24 @@ index 78126f3..42459a4 100644
 +end
 +
 +@testset "Internal errors are redacted (C06)" begin
++    # A marker that reads as sensitive without looking like a real credential:
++    # a literal connection string in a fixture tends to trip secret scanners and
++    # teaches the wrong lesson about what the test is checking.
 +    registry = Dict{String, Function}(
-+        "boom" => params -> error("postgres://user:hunter2@db/marid")
++        "boom" => params -> error("SECRET-MARKER-DO-NOT-LEAK db-host-internal")
 +    )
-+    res = dispatch_rpc(RpcRequest("2.0", "boom", Dict{String, Any}(), 4), registry)
++    # The contract has two halves: the client gets a fixed message, and the
++    # detail goes to the log. Assert both, and keep the log record out of the
++    # test output while doing it.
++    local res
++    @test_logs (:error, r"MaridRPC handler failed") begin
++        res = dispatch_rpc(RpcRequest("2.0", "boom", Dict{String, Any}(), 4), registry)
++    end
 +    @test res.error["code"] == -32603
 +    @test res.error["message"] == "Internal error"
 +    # The whole point: nothing about the failure crosses the wire.
-+    @test !occursin("hunter2", res.error["message"])
-+    @test !occursin("postgres", res.error["message"])
++    @test !occursin("SECRET-MARKER", res.error["message"])
++    @test !occursin("db-host-internal", res.error["message"])
 +    @test res.id == 4
 +end
 +

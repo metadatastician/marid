@@ -1,5 +1,5 @@
 diff --git a/packages/MaridIR/src/MaridIR.jl b/packages/MaridIR/src/MaridIR.jl
-index eb25716..4d6dd69 100644
+index eb25716..0e2925f 100644
 --- a/packages/MaridIR/src/MaridIR.jl
 +++ b/packages/MaridIR/src/MaridIR.jl
 @@ -14,7 +14,7 @@ module MaridIR
@@ -74,7 +74,7 @@ index eb25716..4d6dd69 100644
      
      # Check method signatures
      method_names = Set{String}()
-@@ -159,6 +205,28 @@ function validate_service(svc::ServiceDescriptor)::Bool
+@@ -159,6 +205,33 @@ function validate_service(svc::ServiceDescriptor)::Bool
      return true
  end
  
@@ -97,13 +97,18 @@ index eb25716..4d6dd69 100644
 +            "key" => _type_ref_to_dict(ref.key_type),
 +            "value" => _type_ref_to_dict(ref.value_type)))
 +    end
-+    return "Unsupported"
++    # Fail loudly rather than emit a placeholder. Returning a marker string here
++    # would reproduce the exact defect this function replaced: a descriptor that
++    # renders to something lossy and indistinguishable from real data. A
++    # `TypeRef` subtype this file does not know how to serialise is a bug in the
++    # type system, not a document to be published.
++    error("Unsupported TypeRef kind $(typeof(ref)); cannot serialise it losslessly")
 +end
 +
  # Serialization to pure Dict (golden testable)
  function to_dict(svc::ServiceDescriptor)::Dict{String, Any}
      Dict{String, Any}(
-@@ -172,7 +240,7 @@ function to_dict(svc::ServiceDescriptor)::Dict{String, Any}
+@@ -172,7 +245,7 @@ function to_dict(svc::ServiceDescriptor)::Dict{String, Any}
                  "fields" => [
                      Dict{String, Any}(
                          "name" => f.name,
