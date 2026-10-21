@@ -46,10 +46,12 @@ From the standards side:
    calls one reusable workflow at `da2c748a`, with a `v0.0.3`-shaped lock. Show
    the resolver rejecting it, and the resolver accepting the regenerated lock.
    If the resolver cannot be run offline, say so and stop — do not guess.
-2. *Decide the fix location.* The bug is in the pairing of an old reusable
-   workflow with an old lock schema. The fix therefore belongs in standards
+2. *Decide the fix location.* If the fixture reproduces a mismatch between the
+   old reusable workflow and the old lock schema, the fix belongs in standards
    (make the reusable workflows tolerant of, or explicit about, the lock schema
-   they require) *and* in every consumer (regenerate). Do not “fix” it by
+   they require) *and* in every consumer (regenerate). If reproduction identifies
+   another cause, revise the fix location before making these changes. Do not
+   “fix” it by
    removing `actions-lock` from CI.
 3. *Make the failure legible.* A `Set up job` failure names no step and tells a
    maintainer nothing about which workflow needs which tool version. Add a
