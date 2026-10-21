@@ -1,0 +1,203 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= The two verdict grids on marid's pull requests
+:toc: left
+:toclevels: 3
+:sectnums:
+
+This repository now renders the two matrices that
+`hyperpolymath/standards` defines, on every pull request:
+
+[cols="1,2,2,2",options="header"]
+|===
+|Matrix |Grading family |Lane |Workflow
+
+|DEED–K9 conformance
+|conformance
+|`k9`
+|`.github/workflows/k9-validate.yml` (`k9-grid`, posted by `k9-verdict`)
+
+|Hypatia grid
+|findings
+|`hypatia`
+|`.github/workflows/hypatia-scan.yml` (`hypatia`, posted by `verdict`)
+|===
+
+They are *two comments, never one*: the families share orange and grey and
+nothing else, and mixing them in one row is an error
+(`VERDICT-GRID-SPEC.adoc` §Two grading families).
+
+== Where the details live, and why they are not copied here
+
+The normative material stays in `hyperpolymath/standards`. This document is a
+pointer, not a restatement — a second copy of a specification is a second
+specification, and the two then disagree.
+
+[cols="2,3",options="header"]
+|===
+|Concern |Authoritative location in `hyperpolymath/standards`
+
+|The grid itself (anatomy, both grading families, precedence, badges, delta)
+|`docs/VERDICT-GRID-SPEC.adoc` (Verdict Grid v1.0)
+
+|The DEED–K9 lane's original rendering
+|`1-formats/k9/tools/CONFORMANCE-REPORTING.adoc` (standards#1058)
+
+|Conformance renderer
+|`scripts/k9-grid.sh` + `scripts/lib/k9-grid.jq`; tests in `scripts/tests/k9-grid-test.sh`
+
+|Findings renderer
+|`scripts/verdict-grid.sh` + `scripts/lib/verdict-grid.jq`; tests in `scripts/tests/verdict-grid-test.sh`
+
+|The lanes as reusable workflows
+|`.github/workflows/k9-conformance.yml`, `.github/workflows/hypatia-scan-reusable.yml`
+
+|How the two lanes sit beside each other
+|`docs/CONTRACTILE-DESCRIPTILE-VALIDATION.adoc`
+
+|DEED grammar (ABNF, normative)
+|`1-formats/deed/spec/abnf/deed.abnf` (v1.2.0) with `DEED-GRAMMAR-SPEC.adoc`
+
+|K9 contract grammar
+|`1-formats/k9/spec/contract/k9_contract.ncl` (Nickel) with `K9-CONTRACT-SPEC.adoc`
+
+|K9 coordination protocol (ABNF)
+|`2-protocols/k9-coordination/spec/abnf/coordination-k9-grammar_v1.2.abnf`
+|===
+
+Both lanes are called at one pin, recorded in `.github/workflows/actions.lock`:
+`hyperpolymath/standards@01c9b0c9f2646ebea0b30a9588462642ac94aee9`
+(2026-10-20). The previous pin, `da2c748` (2026-09-10), predates the verdict
+grid entirely — it has no `scripts/verdict-grid.sh` and no
+`.github/workflows/k9-conformance.yml`, so no grid could have been posted from
+it however the calling job was written.
+
+== What each lane reports
+
+Both renderers write `report.md`, `report.json` and `badge.json` into an
+artifact (`k9-grid` and `verdict-grid` respectively). The posting job downloads
+the artifact, finds the one comment carrying the lane's marker, and updates it
+in place; a missing previous comment simply costs the "since previous revision"
+column.
+
+* `<!-- verdict-grid:k9 regenerated on every run -->`
+* `<!-- verdict-grid:hypatia regenerated on every run -->`
+
+Only a comment authored by `github-actions[bot]` counts as the previous
+revision. Anyone able to comment could otherwise plant a marker and a forged
+baseline, and a forged baseline is how a regression renders as an improvement.
+
+=== Adoption status — read this before trusting a colour
+
+* *Hypatia grid — report only.* It never gates. Gating on findings is
+  `block-on-high` on the scan job, which stays at its default (`false`), so
+  this change does not alter what blocks a merge.
+* *DEED–K9 grid — advisory, with a removal condition.* The job carries
+  `continue-on-error: true`. marid's 18 contracts have never been run through
+  the strict L0–L2 validator this lane uses, so the first grid may legitimately
+  be red on pre-existing debt. *Remove `continue-on-error` once a run on `main`
+  renders green or yellow, and let the grid gate from then on.* Until that day
+  the grid is evidence on the pull request, not a gate.
+
+=== The fleet rows are deliberately absent
+
+The Hypatia grid has one row per enrolled fleet member, read from
+`.gitbot-fleet/enrolment.json` and `.gitbot-fleet/report-backs/<member>.json`.
+marid has no `.gitbot-fleet/` directory, so no fleet rows appear. That is not a
+gap being hidden: an enrolled member with no report-back is *orange*, and
+enrolment is a statement this repository has not yet made. Adding the manifest
+is what changes the grid, not editing this document.
+
+== Reproduce locally
+
+[source,bash]
+----
+# Conformance family
+bash scripts/tests/k9-grid-test.sh          # in a checkout of standards
+# Findings family
+bash scripts/tests/verdict-grid-test.sh     # in a checkout of standards
+----
+
+The DEED–K9 lane gates on red by default; orange (indeterminate evidence) fails
+only under `fail-on-indeterminate`, which marid leaves at `false`. A grid state
+is never a fifth readiness grade and is not a security certification
+(`docs/BADGE-CRITERIA-SPEC.adoc`).
+
+== Facts about the migration, stated plainly
+
+Because they are easy to get wrong, and the wrong version changes what a
+reviewer expects to find:
+
+* *`.a2ml` has not been migrated to `.deed` across the estate.* In
+  `hyperpolymath/standards` at `01c9b0c` there are 28 `.deed` files and 163
+  `.a2ml` files outside the format directory and the archive (223 in total).
+  `DEED-GRAMMAR-SPEC.adoc` says the same two things itself: it describes the
+  conversion (#837) as work the ABNF *unblocks*, and records "Fact 1 — the only
+  runnable gate cannot read a deed" and "Fact 2 — `.deed` is invisible".
+  *This repository is already on the far side of that migration*: 0 `.a2ml`
+  files, 2 `.deed` files (`0-AI-MANIFEST.deed`,
+  `.machine_readable/descriptiles/marid_chora.deed`). The residue is upstream.
+* *`.k9` has no ABNF.* The K9 contract grammar is Nickel
+  (`1-formats/k9/spec/contract/k9_contract.ncl`) with a prose specification.
+  The ABNF in the estate is `deed.abnf` and the *coordination protocol*
+  grammar, `coordination-k9-grammar_v1.2.abnf` — different documents.
+* *The LLM material is `3-practice/ai-instruction/`* — `haiku.adoc`,
+  `sonnet.adoc`, `opus.adoc`, one per model tier. It is *prompter* guidance;
+  it is explicitly not the bot-directive channel, which is each repository's
+  `.machine_readable/`.
+
+== Defects found while wiring this, not yet fixed upstream
+
+Recorded here so they are not rediscovered, and so nobody reads a wrong number
+as a right one. All three are in `hyperpolymath/standards` at `01c9b0c`;
+none is worked around in this repository.
+
+[cols="1,2,2",options="header"]
+|===
+|Where |Symptom |Effect
+
+|`scripts/lib/verdict-grid.jq` (top-level `counts`)
+|`counts: ({findings: $reporters} \| counts)` aggregates over *reporter
+objects*, not over their findings, so every finding is filtered out by a
+`.severity` test that can never match.
+|`report.json`'s top-level `counts` is `{0,0,0,0}` on every repository.
+Measured on `MetaManifold-WebUI`'s published report: top-level counts all zero
+while the rows carry 39 critical / 13 high / 37 medium. `state` is computed
+separately and is correct, so badges are unaffected — a consumer that reads
+`counts` (and not the rows) would report a clean scan over 39 critical findings.
+Correct expression: `{findings: [$reporters[].findings[]]} \| counts`, which
+reproduces the row totals exactly.
+
+|`3-practice/ai-instruction/README.adoc`
+|Links to `haiku.md`, `sonnet.md`, `opus.md`; the files are `.adoc`. Cross-refs
+point at `standards/ai-instruction/`, `../llm-warmup-dev.md` and
+`../0-ai-gatekeeper-protocol/`.
+|Three of the four links 404. The real paths are `3-practice/ai-instruction/`,
+`3-practice/provisioning/templates/llm-warmup-*.adoc.tmpl`, and
+`2-protocols/0-ai-gatekeeper/`. The same README still describes the
+`.machine_readable/` channel as "A2ML".
+
+|`docs/VERDICT-GRID-SPEC.adoc` (§Where it runs)
+|Says the K9 lane's `.mjs` renderer "predates this document" and that migrating
+it onto `verdict-grid.jq` is follow-up work.
+|Two renderers in two languages for one family. Not a defect in behaviour; a
+maintenance debt worth naming, since the estate's JS policy counts it.
+
+|`.github/workflows/hypatia-scan-reusable.yml` (read previous grid)
+|Selects the baseline comment with `contains("<!-- verdict-grid:")` — the
+prefix both lanes share — and takes the last one, so it can read the *K9*
+lane's comment.
+|Degrades safely rather than lying: the renderer compares `profile` hashes and
+answers "— no comparable baseline" when the lanes differ, so the delta column
+is lost, not falsified. The K9 lane's own read matches its full marker and is
+unaffected. Match the full marker.
+|===
+
+== Why bun, and not deno
+
+Neither lane adds a JavaScript step to this repository. The K9 renderer that
+does run is the one shipped in the pinned `standards` checkout; the posting jobs
+here are `bash` + `jq` + `gh`, which is what the spec's own findings renderer is
+for the same reason (`NO-JAVASCRIPT-SOURCE-POLICY.adoc`). `.github/workflows/`
+still contains no `deno` reference, and the estate's runtime ruling (Bun >
+Deno > pnpm > npm) is untouched by this change.

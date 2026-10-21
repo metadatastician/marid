@@ -6,6 +6,13 @@
 # feed the gitbot-fleet LEARNING pipeline (via `deposit-findings`), whereas this
 # workflow is the repo's independent security scan. Same tool, two consumers.
 # See .github/workflows/README.adoc.
+#
+# Two lanes, one scanner. `hypatia` runs the scan and renders the Hypatia
+# verdict grid (docs/VERDICT-GRID-SPEC.adoc, findings family) into the
+# `verdict-grid` artifact; `verdict` posts that grid to the pull request.
+# The reusable deliberately does not post, because a reusable may not request
+# more permission than its caller grants it. The posting job here is the
+# caller half the spec describes.
 name: Hypatia Security Scan
 
 on:
@@ -27,4 +34,62 @@ permissions:
 
 jobs:
   hypatia:
-    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@da2c748aad55c1a1dcba00b60fe4a35017bc6540
+    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@01c9b0c9f2646ebea0b30a9588462642ac94aee9
+
+  # The findings-family matrix on every pull request. This job only reports:
+  # it never gates. Gating on findings is `block-on-high` in the scan job
+  # above, which stays at its default (false) so this workflow does not
+  # change what blocks a merge.
+  verdict:
+    name: Post the Hypatia verdict grid
+    needs: hypatia
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Download the verdict grid
+        id: grid
+        continue-on-error: true
+        uses: actions/download-artifact@v8.0.2
+        with:
+          name: verdict-grid
+          path: ${{ runner.temp }}/verdict-grid
+
+      - name: Post the grid, updating the previous one in place
+        if: steps.grid.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          REPORT: ${{ runner.temp }}/verdict-grid/report.md
+        run: |
+          set -euo pipefail
+          # One comment per lane per pull request. The marker is the identity
+          # the next run finds; the spec fixes its text.
+          MARKER='<!-- verdict-grid:hypatia regenerated on every run -->'
+          if [ ! -s "$REPORT" ]; then
+            echo "::warning::the verdict-grid artifact carried no report.md; nothing to post"
+            exit 0
+          fi
+          if ! grep -qF "$MARKER" "$REPORT"; then
+            { printf '%s\n' "$MARKER"; cat "$REPORT"; } > "$REPORT.tmp"
+            mv "$REPORT.tmp" "$REPORT"
+          fi
+
+          # Only the posting account's own comment counts as the previous
+          # revision: anyone able to comment could otherwise plant a marker.
+          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" \
+                 | jq -rs --arg m "$MARKER" \
+                     '[.[][] | select((.user.login // "") == "github-actions[bot]" and ((.body // "") | contains($m)))] | last | .id // empty')
+
+          payload=$(jq -n --rawfile b "$REPORT" '{body: $b}')
+          if [ -n "$id" ]; then
+            printf '%s' "$payload" | gh api -X PATCH "repos/$REPO/issues/comments/$id" --input - >/dev/null
+            echo "updated verdict grid comment $id"
+          else
+            printf '%s' "$payload" | gh api -X POST "repos/$REPO/issues/$PR/comments" --input - >/dev/null
+            echo "created the verdict grid comment"
+          fi
