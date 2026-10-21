@@ -43,8 +43,25 @@ function get_snapshot(cfg::AtomicConfig)::Snapshot
     return @atomic cfg.current
 end
 
+"""
+    swap_snapshot!(cfg::AtomicConfig, next::Snapshot) -> Snapshot
+
+Install `next` as the current snapshot and return it, mirroring
+`update_snapshot!` (which also returns the snapshot it installed).
+
+`@atomicreplace` returns a `NamedTuple{(:old, :success)}`, not a `Snapshot`;
+annotating this function `::Snapshot` therefore made the previous definition
+throw `MethodError: Cannot convert ... to Snapshot` on EVERY call, and the
+absence of a test is why it survived from 2026-09-19 to this change
+(`docs/audits/recon-2026-10-21.adoc`, C03). The compare-and-swap below reads and
+replaces the same value, so it always succeeds; `success` is asserted rather
+than assumed so a future change to the atomic cannot silently return the wrong
+snapshot.
+"""
 function swap_snapshot!(cfg::AtomicConfig, next::Snapshot)::Snapshot
-    return @atomicreplace cfg.current cfg.current => next
+    res = @atomicreplace cfg.current cfg.current => next
+    res.success || error("snapshot swap failed unexpectedly")
+    return next
 end
 
 function update_snapshot!(mutator::Function, cfg::AtomicConfig)::Snapshot

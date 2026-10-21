@@ -22,6 +22,23 @@ using MaridControl
         @test s2.data["cluster_name"] == "node-alpha"
     end
 
+    # 1b. swap_snapshot! returns the installed snapshot (C03)
+    @testset "swap_snapshot! installs and returns the new snapshot" begin
+        cfg = AtomicConfig(Snapshot(0, MaridControl.now(MaridControl.UTC), Dict{String, Any}("a" => 1)))
+        next = Snapshot(1, MaridControl.now(MaridControl.UTC), Dict{String, Any}("a" => 2))
+
+        installed = swap_snapshot!(cfg, next)   # was: MethodError on every call
+        @test installed isa Snapshot
+        @test installed === next
+        @test installed.version == 1
+        @test get_snapshot(cfg).version == 1
+        @test get_snapshot(cfg).data["a"] == 2
+
+        # A swap is not a merge: the previous payload does not survive unless the
+        # caller put it there. Documented contract, asserted here.
+        @test !haskey(get_snapshot(cfg).data, "b")
+    end
+
     # 2. Sequential Log Abstraction
     @testset "Sequential Log Append & Playback" begin
         log = SequentialLog()
