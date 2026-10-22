@@ -16,11 +16,21 @@ permissions:
 
 jobs:
   scorecard:
-    uses: hyperpolymath/standards/.github/workflows/scorecard-reusable.yml@da2c748aad55c1a1dcba00b60fe4a35017bc6540
+    uses: hyperpolymath/standards/.github/workflows/scorecard-reusable.yml@01c9b0c9f2646ebea0b30a9588462642ac94aee9
     # Reusable called-workflow permissions are CAPPED by the caller's grants;
     # without security-events: write here the scorecard SARIF upload fails with
     # startup_failure (hypatia WF018). id-token: write enables OIDC publish.
+    #
+    # A job-level block REPLACES the workflow-level one rather than merging
+    # with it, so every permission the callee needs must be repeated here.
+    # `actions: read` was declared above and then dropped by this block, which
+    # is the exact mistake scorecard-reusable.yml's header warns about
+    # ("Audited 2026-09-14: 11 of 13 callers in the estate omitted it"). Its
+    # job declares all four; a called workflow cannot elevate, so Scorecard's
+    # Packaging check (Actions.ListWorkflowRunsByFileName) errors on scheduled
+    # runs. Invisible on pull requests because this workflow is schedule-only.
     permissions:
+      actions: read
       contents: read
       security-events: write
       id-token: write

@@ -1,0 +1,285 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= CI triage: what runs, what it is worth, and what is broken
+:toc: left
+:toclevels: 2
+:sectnums:
+
+This is the census behind the CI changes of October 2026. It records what the
+39 workflows actually cost, which of them report on marid's own surface, and
+which were reporting nothing at all because they could not start.
+
+The distinction that matters throughout: a check that *fails* is not the same
+as a check that *ran and found something*. Most of the red in this repository
+was the first kind pretending to be the second.
+
+== What was actually wrong
+
+Six workflows called a `hyperpolymath/standards` reusable. Five were pinned to
+`da2c748` (2026-09-10) and **every job they created died at "Set up job"**:
+
+[source,text]
+----
+Unable to resolve action `actions/checkout@3d3c42e5…`: invalid lockfile pin.
+lockfile verification did not produce a result for this action
+----
+
+On pristine `main` at `7f9abca` that was **17 failing checks out of ~45**. One
+unresolvable ref zeroed a fifteen-row governance matrix at once; the rest took
+out `rust-ci` and all three secret scanners.
+
+`static-analysis-gate` stayed green throughout with four *inline* jobs. That is
+what located the fault in reusable resolution rather than in any script: no
+governance script ever executed, so even licence consistency was reported red.
+
+=== Why the local gate did not catch it
+
+`scripts/check-lock-sync.sh` reported the file as in sync. Two entries in the
+nested set cannot resolve, and the script cannot see either:
+
+[cols="2,2,2",options="header"]
+|===
+|Entry |Why GitHub rejects it |Why the local gate passes it
+
+|`Swatinem/rust-cache@6323deb1` (capital S)
+|the lock records `swatinem/…`; the verifier is case-sensitive on the nested key
+|the script lowercases owner/repo before comparing, deliberately
+
+|`github/codeql-action/upload-sarif@cdf488f5`
+|a **subpath pin**; the lockfile schema rejects it
+|the script's own advice text says to collapse subpaths, so the collapsed
+record looks like it satisfies it
+|===
+
+The script's header already names this trap one layer up ("is every `uses:`
+locked?" versus "is every locked ref *resolvable*?"). The nested reusable set
+is a second instance of it, and the generator cannot help: `gh actions-lock`
+"does NOT handle job-level reusable-workflow refs".
+
+== The result
+
+Re-pinning the five to `01c9b0c` — the commit this repo's Hypatia and K9 lanes
+already used — and recording the nested set recomputed from the seven reusable
+files at that commit took the same pull request from **17–18 failures to 4**,
+with 90 passing.
+
+Two of those four are *new* and genuine: they had been invisible behind the
+startup failure. That is the whole point of the exercise — the red was hiding
+more red.
+
+== The census
+
+[cols="2,1,1,3",options="header"]
+|===
+|Workflow |Fires on |Verdict |Reason
+
+|`julia-ci`
+|PR + main
+|*keep, narrowed*
+|Tests the actual product. Now filtered to `packages/**`, its bootstrap
+scripts and `Project.toml`.
+
+|`web-ci`
+|PR + main
+|*keep, narrowed*
+|Tests the browser packages. `push` was filtered to `web/**`; `pull_request`
+was not. Now both are.
+
+|`rust-ci`
+|PR + main
+|*keep, narrowed*
+|marid's only Rust is `scripts/`. Now filtered there.
+
+|`secret-scanner`
+|PR + main
+|*keep, unfiltered* — required
+|Ruleset `24310246` (Secret-Scan-Floor) requires `scan / gitleaks`. It is the
+only branch-required check in this repository. Filtering it would deadlock
+every pull request and never merge, which is what `lock-sync-gate.yml`'s own
+header warns about.
+
+|`lock-sync-gate`
+|PR + main
+|*keep, unfiltered*
+|Structurally immune to the failure it detects (no `uses:` of its own). Must
+stay unfiltered for the same reason as above.
+
+|`workflow-linter`
+|PR (workflows only)
+|*keep*
+|Correctly scoped already.
+
+|`dco`, `empty-linter`
+|PR
+|*keep*
+|Cheap, precise, and about the change itself.
+
+|`codeql`
+|PR + main + schedule
+|*keep*
+|Code scanning needs to run on every PR to produce alerts at all.
+
+|`governance` (reusable)
+|PR + main
+|*keep, upstream defect*
+|Fifteen real checks. Currently two fail: the UUID pair, below.
+
+|`hypatia-scan`
+|PR + main + weekly
+|*keep*
+|Now renders the findings verdict grid.
+
+|`k9-validate`
+|PR + main
+|*keep*
+|Now renders the DEED–K9 conformance grid; see below for its 16 findings.
+
+|`sonarqube`
+|PR + main
+|*refined to advisory*
+|Duplicates SonarCloud's automatic analysis, and with a non-working token it
+reports a credential state as a code-quality failure.
+
+|`scorecard`, `rsr-compliance-canary`, `labels`
+|schedule only
+|*keep*
+|Zero per-PR cost.
+
+|`mirror`, `pages`, `release`, `docker-build`, `build-notification`, `push-email-notify`
+|push only
+|*keep*
+|Zero per-PR cost.
+
+|`dependabot-automerge`, `label-triage`
+|events only
+|*keep*
+|Zero per-PR cost.
+
+|`eclexiaiser-validate`, `capability-spec`, `groove-check`, `guix-policy`, `dot-wellknown-enforcement`
+|PR + main
+|*candidates for removal*
+|None describes marid's surface. Each is a real estate check; none is a signal
+about a Julia CRDT library. Recommended: `push: main` plus `workflow_dispatch`,
+so the estate still gets the answer and no contributor waits for it.
+
+|`dogfood-gate` (6 jobs) + `dogfood-summary`
+|PR + main
+|*candidates for consolidation*
+|Seven jobs' worth of estate self-assessment fired at every pull request.
+|===
+
+=== Duplication worth naming
+
+* **Hypatia is scanned twice** — inline in `static-analysis-gate` and again in
+  `hypatia-scan`. `.github/workflows/README.adoc` documents this as deliberate
+  (security scan versus fleet-learning feed). It is defensible; it is also two
+  checks for one tool, and the second one now also renders a grid.
+* **The UUID gate runs twice, identically.** `governance-reusable.yml` has both
+  `uuid-v7-conformance` and `uuid-v8-conformance`, and both execute the same
+  command: `scripts/check-uuid-v8.sh --strict .`. The v7 job survives only
+  because live rulesets still name that context. It is dead weight to be
+  removed once the rulesets move.
+* **Nine security scanners**: CodeQL, SonarQube, gitleaks (CI), TruffleHog
+  (pre-push hook), GitGuardian, OSSF, Scorecard, panic-attack, Hypatia.
+
+== The findings that are real
+
+=== UUID conformance — one genuine, two false
+
+`scripts/check-uuid-v8.sh --strict .` reports four literals. Running it
+locally reproduces exactly:
+
+[source,text]
+----
+./CLAUDE.md: non-v8 UUID literal (4401e361-daea-5220-8003-5e0e8dab248f)
+./docs/plans/patches/0004-openapi-json3-emitter.patch: non-v8 UUID literal (0f8b85d8-7281-11e9-16c2-39a750bddbf1)
+./docs/plans/patches/0007-live-json-escaping.patch: non-v8 UUID literal (ade2ca70-3891-5945-98fb-dc099432e06a)
+./docs/plans/patches/0007-live-json-escaping.patch: non-v8 UUID literal (0f8b85d8-7281-11e9-16c2-39a750bddbf1)
+----
+
+*The patch-file pair is a false positive, and editing them is not an option.*
+`0f8b85d8-…` is `JSON3`'s UUID in the Julia General registry and
+`ade2ca70-…` is `Dates`'; both appear as added lines in a diff that extends a
+`Project.toml` `[deps]` table. The validator already exempts exactly this class
+of identifier — its `scannable_text` skips `[deps]`, `[weakdeps]` and `[extras]`
+in a `Project.toml` and skips `Manifest.toml` entirely, with the comment
+"those are external identifiers (the standard: preserve and type explicitly)".
+It simply does not recognise a `.patch` file that *contains* a `Project.toml`
+hunk. That is a specific, fixable gap upstream: treat `*.patch`/`*.diff`
+content as the file it patches, or exempt those extensions.
+
+They also cannot be "fixed" here without breaking something real: the eight
+patches in `docs/plans/patches/` reproduce `packages/` byte-for-byte, which is
+the property `docs/plans/patches/README.adoc` exists to state.
+
+*`CLAUDE.md` is genuine but not marid's to invent.* `4401e361-daea-5220-…` is
+version 5, and ADR-008 makes version 8 the estate standard. It sits inside the
+generated ARRIVAL-PACK region, so the edit belongs wherever that pack is
+sourced, not in `CLAUDE.md` itself. Replacing a repository's identity UUID is a
+governance act with downstream effects (badges, registries, cross-references);
+it should be decided by the owner, not silently minted by an agent.
+
+=== DEED–K9 conformance — real, and 16 of 18
+
+The grid's first honest run on this repository:
+
+[cols="1,3",options="header"]
+|===
+|Row |Result
+
+|K9 contract typecheck
+|pass, 1/1
+|K9 validator self-test
+|pass, 37/37
+|K9 live corpus (L0–L2)
+|*fail, 2 pass / 16 fail*
+|===
+
+Grouped by what each actually needs:
+
+[cols="1,3",options="header"]
+|===
+|Group |Files and defects
+
+|A — v0 dialect (7)
+|`contractiles/{adjust,bust,dust,intend,must,trust}/*.k9.ncl` and
+`build/container/stapeln/deploy.k9.ncl` have no `pedigree.schema_version` at
+all. `deploy` also has `recipes` at the wrong level (S011) and no leash or
+name. These need migrating to v1.0.0, not a field added.
+
+|B — one field short (5)
+|`arrival-pack/claude-md`, `coaptation/coapt`, `self-validating/methodology-guard`,
+`coordination.k9`, `session/custom-checks` are missing
+`pedigree.component_type` (S003).
+
+|C — capabilities (all)
+|`pedigree.security.capabilities` appears in **none** of the 18, while flags
+request `process.spawn` under default-deny (S007).
+
+|D — signature (1)
+|`self-validating/examples/setup-repo.k9.ncl` declares a `Hunt` leash with no
+`signature` block (S009).
+
+|E — templates (3)
+|`self-validating/template-{hunt,kennel,yard}` carry literal `TODO:`
+placeholders in `component_type`/`metadata.name` (S003/S005). These are
+uninstantiated templates; filling them in defeats their purpose, so the honest
+remedy is to move them out of the committed corpus or grandfather them.
+|===
+
+This lane cannot be made advisory: a job that calls a reusable workflow may not
+carry `continue-on-error`, and adding it makes GitHub refuse the workflow at
+startup with zero jobs. It is a gate or it is nothing.
+
+== What is still open
+
+. The 16 contracts above (groups A–E).
+. The `CLAUDE.md` identity UUID — owner decision.
+. Two upstream `standards` defects already recorded in
+  `docs/practice/PR-VERDICT-GRIDS.adoc`: the zeroed top-level `counts` in
+  `verdict-grid.jq`, and the 404 links in `3-practice/ai-instruction/`.
+. A third upstream defect found here: the UUID validator's Julia exemption does
+  not cover `.patch` files containing `Project.toml` hunks.
+. `eclexiaiser-validate`, `capability-spec`, `groove-check`, `guix-policy`,
+  `dot-wellknown-enforcement` still fire on every pull request.
+. `governance-reusable.yml`'s duplicate UUID jobs — upstream.

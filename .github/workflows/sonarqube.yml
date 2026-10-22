@@ -38,6 +38,13 @@ jobs:
     name: SonarQube
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Advisory. SonarCloud's AUTOMATIC analysis already reports on this repo
+    # as the separate "SonarCloud Code Analysis" check, so a red here is not
+    # lost coverage -- and when the token guard below reports
+    # `configured=true` but the scan then fails, the red is a credential
+    # state, not a finding about this change. Blocking merges on it is what
+    # this workflow's own header says must not happen.
+    continue-on-error: true
     # Secrets cannot be referenced from a job-level `if:`, so the presence test
     # is carried through an env var set at job scope and read in a first step.
     env:

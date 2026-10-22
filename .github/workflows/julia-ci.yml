@@ -6,8 +6,20 @@ name: Julia Packages CI
 on:
   push:
     branches: [main]
+    paths:
+      - 'packages/**'
+      - 'scripts/bootstrap.jl'
+      - 'scripts/marid'
+      - '.github/workflows/julia-ci.yml'
+      - 'Project.toml'
   pull_request:
     branches: [main]
+    paths:
+      - 'packages/**'
+      - 'scripts/bootstrap.jl'
+      - 'scripts/marid'
+      - '.github/workflows/julia-ci.yml'
+      - 'Project.toml'
   workflow_dispatch:
 
 concurrency:

@@ -7,7 +7,17 @@ name: Rust CI
 on:
   push:
     branches: [main, master]
+    paths:
+      - 'scripts/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/rust-ci.yml'
   pull_request:
+    paths:
+      - 'scripts/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/rust-ci.yml'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -16,4 +26,4 @@ permissions:
   contents: read
 jobs:
   rust-ci:
-    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@da2c748aad55c1a1dcba00b60fe4a35017bc6540
+    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@01c9b0c9f2646ebea0b30a9588462642ac94aee9
