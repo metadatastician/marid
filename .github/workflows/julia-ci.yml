@@ -54,7 +54,7 @@ jobs:
           - MaridRaft
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: julia-actions/setup-julia@v3.0.2
+      - uses: julia-actions/setup-julia@v3.0.3
         with:
           version: ${{ matrix.version }}
       - name: Run Package Tests
@@ -67,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: julia-actions/setup-julia@v3.0.2
+      - uses: julia-actions/setup-julia@v3.0.3
         with:
           version: '1.10.10'
       - run: |
@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: julia-actions/setup-julia@v3.0.2
+      - uses: julia-actions/setup-julia@v3.0.3
         with:
           version: '1.10.10'
       - name: Check Julia [compat] entries (marid#22 / D68)
