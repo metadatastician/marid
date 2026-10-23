@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: julia-actions/setup-julia@v3.0.2
+      - uses: julia-actions/setup-julia@v3.0.3
         with:
           version: '1.10.10'
       - uses: erlef/setup-beam@v1.24.1
