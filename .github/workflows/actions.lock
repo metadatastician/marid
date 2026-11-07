@@ -87,7 +87,7 @@ workflows:
     '.github/workflows/scorecard.yml':
         - 'hyperpolymath/standards@01c9b0c9f2646ebea0b30a9588462642ac94aee9'
     '.github/workflows/secret-scanner.yml':
-        - 'hyperpolymath/standards@01c9b0c9f2646ebea0b30a9588462642ac94aee9'
+        - 'metadatastician/standards@b8f60511e76c9015d86990317162dce653c92fe1'
     '.github/workflows/security-policy.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/sonarqube.yml':
@@ -281,6 +281,13 @@ dependencies:
         commit: 'sha1-da908477b5db94c10ffce8cfea9f2b3b9d5db687'
         owner_id: 53965732
         repo_id: 202020219
+    'metadatastician/standards@b8f60511e76c9015d86990317162dce653c92fe1':
+        ref: 'b8f60511e76c9015d86990317162dce653c92fe1'
+        commit: 'sha1-b8f60511e76c9015d86990317162dce653c92fe1'
+        owner_id: 297579217
+        repo_id: 1116521501
+        uses:
+            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     'ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e':
         ref: 'fa7117db83c52d787ae5a89f350999701505d78e'
         commit: 'sha1-fa7117db83c52d787ae5a89f350999701505d78e'
