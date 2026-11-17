@@ -77,3 +77,82 @@ jobs:
           else
             echo "✅ Core documentation present"
           fi
+
+  # ==========================================================================
+  # Required status check "CI/gate" (Branch-Floor ruleset).
+  # The check context is this job's name. It waits for every other job in this
+  # workflow and runs even when one fails, is cancelled or is skipped; it exits
+  # 0 only when every required job succeeded (or was skipped by design behind a
+  # detector job that itself succeeded). Pattern: hyperpolymath/hypatia ci.yml.
+  # ==========================================================================
+  ci-gate:
+    name: CI/gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    needs: [lint, docs]
+    if: always()
+    steps:
+      - name: Require every needed job to have succeeded
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          REQUIRED_JOBS: "lint docs"
+          ADVISORY_JOBS: ""
+          DESIGNED_SKIPS: ""
+        run: |
+          set -euo pipefail
+          summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
+          result_of() { local job="$1"; jq -r --arg j "$job" '.[$j].result // "missing"' <<< "$NEEDS_JSON"; }
+          in_list() { local needle="$1" haystack="$2"; case " $haystack " in *" $needle "*) return 0 ;; esac; return 1; }
+          detector_of() {
+            local job="$1" pair
+            for pair in $DESIGNED_SKIPS; do
+              if [ "${pair%%:*}" = "$job" ]; then echo "${pair#*:}"; return 0; fi
+            done
+            return 1
+          }
+          row() { printf '| %s | %s | %s | %s |\n' "$@" | tee -a "$summary"; }
+          {
+            echo "### CI/gate"
+            echo
+            echo "| job | result | role | verdict |"
+            echo "|---|---|---|---|"
+          } | tee -a "$summary"
+          fail=0
+          total=0
+          passed=0
+          for j in $REQUIRED_JOBS; do
+            total=$((total + 1))
+            r=$(result_of "$j")
+            case "$r" in
+              success) v="ok"; passed=$((passed + 1)) ;;
+              skipped)
+                if d=$(detector_of "$j") && [ "$(result_of "$d")" = "success" ]; then
+                  v="ok (designed skip; detector $d succeeded)"; passed=$((passed + 1))
+                else
+                  v="FAIL (skipped without a successful detector)"; fail=1
+                fi ;;
+              *) v="FAIL (result must be success)"; fail=1 ;;
+            esac
+            row "$j" "$r" required "$v"
+          done
+          for j in $ADVISORY_JOBS; do
+            row "$j" "$(result_of "$j")" advisory "not gating"
+          done
+          for j in $(jq -r 'keys[]' <<< "$NEEDS_JSON"); do
+            if ! in_list "$j" "$REQUIRED_JOBS $ADVISORY_JOBS"; then
+              row "$j" "$(result_of "$j")" unclassified "FAIL (job is in needs but neither required nor advisory)"
+              fail=1
+            fi
+          done
+          if [ "$total" -eq 0 ]; then
+            echo "::error::no required jobs configured"
+            fail=1
+          fi
+          msg="required jobs: $total; satisfied: $passed; advisory: $(wc -w <<< "$ADVISORY_JOBS")"
+          echo "$msg" | tee -a "$summary"
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::CI/gate failed ($msg)"
+            exit 1
+          fi
+          echo "CI/gate passed ($msg)"
