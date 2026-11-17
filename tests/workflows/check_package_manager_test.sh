@@ -44,4 +44,24 @@ if "$CHECKER" "$FIXTURE" > "$FIXTURE/out" 2>&1; then
 fi
 grep -q 'web/client/package.json: packageManager is "bun@1.0.0", CI pins bun@9.9.9' "$FIXTURE/out"
 
+# A compact one-line manifest is valid JSON and must pass.
+printf '{"name":"x","packageManager":"bun@9.9.9"}\n' > "$FIXTURE/web/client/package.json"
+"$CHECKER" "$FIXTURE" | grep -q '^PASS:'
+
+# A nested packageManager must not stand in for a missing root one.
+printf '{\n  "name": "x",\n  "config": {\n    "packageManager": "bun@9.9.9"\n  }\n}\n' > "$FIXTURE/web/client/package.json"
+if "$CHECKER" "$FIXTURE" > "$FIXTURE/out" 2>&1; then
+    echo "FAIL: checker accepted a nested packageManager with no root one" >&2
+    exit 1
+fi
+grep -q '^FAIL: web/client/package.json: missing' "$FIXTURE/out"
+
+# A manifest that is not valid JSON is reported, not skipped.
+printf '{ not json\n' > "$FIXTURE/web/client/package.json"
+if "$CHECKER" "$FIXTURE" > "$FIXTURE/out" 2>&1; then
+    echo "FAIL: checker accepted an invalid manifest" >&2
+    exit 1
+fi
+grep -q '^FAIL: web/client/package.json: not valid JSON' "$FIXTURE/out"
+
 echo "PASS: check-package-manager tests"

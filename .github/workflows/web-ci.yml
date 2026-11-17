@@ -12,10 +12,16 @@ on:
     paths:
       - 'web/**'
       - '.github/workflows/web-ci.yml'
+      - 'examples/relationship_explorer/**'
+      - 'scripts/check-package-manager.sh'
+      - 'tests/workflows/check_package_manager_test.sh'
   pull_request:
     paths:
       - 'web/**'
       - '.github/workflows/web-ci.yml'
+      - 'examples/relationship_explorer/**'
+      - 'scripts/check-package-manager.sh'
+      - 'tests/workflows/check_package_manager_test.sh'
   workflow_dispatch:
 
 concurrency:

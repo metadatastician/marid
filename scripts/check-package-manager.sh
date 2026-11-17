@@ -12,6 +12,12 @@
 set -euo pipefail
 
 ROOT="${1:-.}"
+
+if ! command -v bun >/dev/null 2>&1; then
+    echo "ERROR: bun is needed to parse the manifests and was not found on PATH" >&2
+    exit 2
+fi
+
 WORKFLOW="$ROOT/.github/workflows/web-ci.yml"
 
 if [ ! -f "$WORKFLOW" ]; then
@@ -37,7 +43,17 @@ fail=0
 count=0
 while IFS= read -r f; do
     count=$((count + 1))
-    declared=$(sed -n -E 's/^[[:space:]]*"packageManager":[[:space:]]*"([^"]*)".*$/\1/p' "$ROOT/$f" | head -n 1)
+    # Read the field from the ROOT object of the parsed JSON: a one-line manifest must pass, and a
+    # nested "packageManager" must not stand in for a missing root one.
+    if ! declared=$(bun -e '
+const m = JSON.parse(require("fs").readFileSync(process.argv.at(-1), "utf8"));
+const v = m !== null && typeof m === "object" && !Array.isArray(m) ? m.packageManager : undefined;
+process.stdout.write(typeof v === "string" ? v : "");
+' "$ROOT/$f" 2>/dev/null); then
+        echo "FAIL: $f: not valid JSON"
+        fail=1
+        continue
+    fi
     if [ -z "$declared" ]; then
         echo "FAIL: $f: missing \"packageManager\" (expected bun@$pinned)"
         fail=1
