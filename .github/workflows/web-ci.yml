@@ -40,6 +40,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version: '1.4.2'
+      - name: Check packageManager matches the Bun pin
+        run: |
+          bash ../scripts/check-package-manager.sh ..
+          bash ../tests/workflows/check_package_manager_test.sh
       - name: Install workspace (frozen lockfile)
         run: bun install --frozen-lockfile
       - name: Run tests

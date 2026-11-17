@@ -11,5 +11,6 @@
   "scripts": {
     "test": "bun test"
   },
+  "packageManager": "bun@1.4.2",
   "license": "MPL-2.0"
 }

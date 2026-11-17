@@ -9,5 +9,6 @@
     "test": "bun test"
   },
   "author": "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>",
+  "packageManager": "bun@1.4.2",
   "license": "MPL-2.0"
 }
