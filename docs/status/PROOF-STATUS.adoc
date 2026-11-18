@@ -20,7 +20,7 @@
 | *Total* | *7* | *0* | *0* | *0* | *7*
 |===
 
-*Overall*: 0% proven
+*Overall*: 0 of 7 proven
 
 == Proofs Done
 
