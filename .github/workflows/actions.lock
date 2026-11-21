@@ -92,7 +92,7 @@ workflows:
         - 'actions/checkout@v7.0.1'
     '.github/workflows/sonarqube.yml':
         - 'actions/checkout@v7.0.1'
-        - 'sonarsource/sonarqube-scan-action@v8.4.1'
+        - 'sonarsource/sonarqube-scan-action@v8.5.0'
     '.github/workflows/static-analysis-gate.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/download-artifact@v8.0.2'
@@ -308,9 +308,9 @@ dependencies:
         commit: 'sha1-8a0cd651e5b2365bd640854a3fa5dfc70e4875f3'
         owner_id: 2242
         repo_id: 204253808
-    'sonarsource/sonarqube-scan-action@v8.4.1':
-        ref: 'v8.4.1'
-        commit: 'sha1-e805d875275f728fac1885b413934be6d7c63f65'
+    'sonarsource/sonarqube-scan-action@v8.5.0':
+        ref: 'v8.5.0'
+        commit: 'sha1-59202af334b4ba7b5db01b701b8e79f8b3bef0f4'
         owner_id: 545988
         repo_id: 366408409
     'swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6':
