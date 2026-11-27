@@ -17,15 +17,15 @@ workflows:
         - 'actions/checkout@v7.0.1'
     '.github/workflows/deed-validate.yml':
         - 'actions/checkout@v7.0.1'
-        - 'hyperpolymath/deed-ecosystem@4cb8886be67cf0d67e150679d1213ea519c3806f'
+        - 'hyperpolymath/deed-ecosystem@b883049e656a74a4f664f6ca119f7048ba8990d6'
     '.github/workflows/dependabot-automerge.yml':
         - 'dependabot/fetch-metadata@v3.1.0'
     '.github/workflows/docker-build.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/dogfood-gate.yml':
         - 'actions/checkout@v7.0.1'
-        - 'hyperpolymath/deed-ecosystem@4cb8886be67cf0d67e150679d1213ea519c3806f'
-        - 'hyperpolymath/k9-ecosystem@20f6be5b5a14a48680b236955b5c4ad9033d00d4'
+        - 'hyperpolymath/deed-ecosystem@b883049e656a74a4f664f6ca119f7048ba8990d6'
+        - 'hyperpolymath/k9-ecosystem@bf7f5d53f6c3ce6258453e7f502b444b9fad7987'
     '.github/workflows/dogfood-summary.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/dot-wellknown-enforcement.yml':
@@ -51,8 +51,7 @@ workflows:
     '.github/workflows/k9-validate.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/download-artifact@v8.0.2'
-        - 'hyperpolymath/k9-ecosystem@20f6be5b5a14a48680b236955b5c4ad9033d00d4'
-        - 'hyperpolymath/standards@01c9b0c9f2646ebea0b30a9588462642ac94aee9'
+        - 'hyperpolymath/k9-ecosystem@bf7f5d53f6c3ce6258453e7f502b444b9fad7987'
     '.github/workflows/label-triage.yml': []
     '.github/workflows/labels.yml': []
     '.github/workflows/lock-sync-gate.yml': []
@@ -92,7 +91,7 @@ workflows:
         - 'actions/checkout@v7.0.1'
     '.github/workflows/sonarqube.yml':
         - 'actions/checkout@v7.0.1'
-        - 'sonarsource/sonarqube-scan-action@v8.5.0'
+        - 'sonarsource/sonarqube-scan-action@v8.5.1'
     '.github/workflows/static-analysis-gate.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/download-artifact@v8.0.2'
@@ -242,14 +241,14 @@ dependencies:
         commit: 'sha1-af7062381f7ae5f731c12051a671a373c72d7541'
         owner_id: 6759885
         repo_id: 1326697643
-    'hyperpolymath/deed-ecosystem@4cb8886be67cf0d67e150679d1213ea519c3806f':
+    'hyperpolymath/deed-ecosystem@b883049e656a74a4f664f6ca119f7048ba8990d6':
         ref: 'main'
-        commit: 'sha1-4cb8886be67cf0d67e150679d1213ea519c3806f'
+        commit: 'sha1-b883049e656a74a4f664f6ca119f7048ba8990d6'
         owner_id: 6759885
         repo_id: 1275649586
-    'hyperpolymath/k9-ecosystem@20f6be5b5a14a48680b236955b5c4ad9033d00d4':
+    'hyperpolymath/k9-ecosystem@bf7f5d53f6c3ce6258453e7f502b444b9fad7987':
         ref: 'main'
-        commit: 'sha1-20f6be5b5a14a48680b236955b5c4ad9033d00d4'
+        commit: 'sha1-bf7f5d53f6c3ce6258453e7f502b444b9fad7987'
         owner_id: 6759885
         repo_id: 1275650185
     'hyperpolymath/smtp-notify-action@v0.5.1':
@@ -308,9 +307,9 @@ dependencies:
         commit: 'sha1-8a0cd651e5b2365bd640854a3fa5dfc70e4875f3'
         owner_id: 2242
         repo_id: 204253808
-    'sonarsource/sonarqube-scan-action@v8.5.0':
-        ref: 'v8.5.0'
-        commit: 'sha1-59202af334b4ba7b5db01b701b8e79f8b3bef0f4'
+    'sonarsource/sonarqube-scan-action@v8.5.1':
+        ref: 'v8.5.1'
+        commit: 'sha1-70bad232163b09d998ea0707ee80c0ec80798c16'
         owner_id: 545988
         repo_id: 366408409
     'swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6':
